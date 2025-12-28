@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Place Your Order - ShortFormFactory</title>
+<meta name="description" content="Order professional video editing services. Secure PayPal payment, fast delivery.">
+<link rel="stylesheet" href="/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="bg-grid"></div>
+  
+  <header class="header" id="header">
+    <div class="header-content">
+      <a href="/" class="logo">
+        <div class="logo-img">SF</div>
+        <span class="logo-text">ShortFormFactory</span>
+      </a>
+      <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <nav class="nav" id="mainNav">
+        <a href="/services.html" class="nav-link">Services</a>
+        <a href="/order.html" class="nav-link">Order</a>
+        <a href="/contact.html" class="nav-link">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="order-page">
+    <div class="order-container">
+      <h1 class="page-title">Start Your Order</h1>
+      <p class="page-subtitle">Select your service, complete secure payment, then submit your project details</p>
+
+      <div class="order-grid">
+        <div class="order-form-section">
+          <div class="form-card">
+            <div class="form-group">
+              <label class="form-label" for="serviceSelect">
+                <span class="label-icon">🎬</span>
+                Select Service
+              </label>
+              <select id="serviceSelect" class="form-select">
+                <option value="">Choose your service...</option>
+                <option value="aiReel">AI Reel Edit</option>
+                <option value="socialEdit">Social Media Edit</option>
+                <option value="viralCaptions">Viral Captions</option>
+                <option value="podcastRepurpose">Podcast / YouTube Repurpose</option>
+                <option value="autoCaptions">Auto Captions</option>
+                <option value="smartCut">Video Trim / Smart Cut</option>
+                <option value="backgroundRemoval">Background Removal</option>
+                <option value="audioSync">Add Music / Audio Sync</option>
+              </select>
+              <div class="error-message" id="serviceError">Please select a service to continue</div>
+            </div>
+
+            <div class="form-group" id="packageSection" style="display:none;">
+              <label class="form-label">
+                <span class="label-icon">📦</span>
+                Choose Package
+              </label>
+              <div class="package-grid" id="packageGrid"></div>
+              <div class="error-message" id="packageError">Please select a package tier</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">
+                <span class="label-icon">⭐</span>
+                Add-ons (Optional)
+              </label>
+              <div class="addons-grid">
+                <label class="addon-checkbox">
+                  <input type="checkbox" value="rush" data-price="25" data-name="Rush Delivery (12-24h)">
+                  <span class="addon-content">
+                    <span class="addon-name">Rush Delivery</span>
+                    <span class="addon-desc">12-24 hour turnaround</span>
+                  </span>
+                  <span class="addon-price">+$25</span>
+                </label>
+                <label class="addon-checkbox">
+                  <input type="checkbox" value="extraClip" data-price="15" data-name="Extra Clip (+1)">
+                  <span class="addon-content">
+                    <span class="addon-name">Extra Clip</span>
+                    <span class="addon-desc">Add one more clip</span>
+                  </span>
+                  <span class="addon-price">+$15</span>
+                </label>
+                <label class="addon-checkbox">
+                  <input type="checkbox" value="extraMinute" data-price="10" data-name="Extra Minute Raw Footage">
+                  <span class="addon-content">
+                    <span class="addon-name">Extra Minute</span>
+                    <span class="addon-desc">Additional raw footage</span>
+                  </span>
+                  <span class="addon-price">+$10</span>
+                </label>
+                <label class="addon-checkbox">
+                  <input type="checkbox" value="premiumCaptions" data-price="15" data-name="Premium Captions Upgrade">
+                  <span class="addon-content">
+                    <span class="addon-name">Premium Captions</span>
+                    <span class="addon-desc">Advanced animations</span>
+                  </span>
+                  <span class="addon-price">+$15</span>
+                </label>
+                <label class="addon-checkbox">
+                  <input type="checkbox" value="colorGrade" data-price="20" data-name="Color Grade Enhance">
+                  <span class="addon-content">
+                    <span class="addon-name">Color Grading</span>
+                    <span class="addon-desc">Professional color</span>
+                  </span>
+                  <span class="addon-price">+$20</span>
+                </label>
+                <label class="addon-checkbox">
+                  <input type="checkbox" value="advancedEffects" data-price="25" data-name="Advanced Effects Pack">
+                  <span class="addon-content">
+                    <span class="addon-name">Advanced Effects</span>
+                    <span class="addon-desc">Premium VFX</span>
+                  </span>
+                  <span class="addon-price">+$25</span>
+                </label>
+                <label class="addon-checkbox">
+                  <input type="checkbox" value="thumbnails" data-price="20" data-name="Thumbnail Pack (3)">
+                  <span class="addon-content">
+                    <span class="addon-name">Thumbnails</span>
+                    <span class="addon-desc">3 custom thumbnails</span>
+                  </span>
+                  <span class="addon-price">+$20</span>
+                </label>
+                <label class="addon-checkbox">
+                  <input type="checkbox" value="musicLicense" data-price="10" data-name="Music Licensing (provide link)">
+                  <span class="addon-content">
+                    <span class="addon-name">Music Licensing</span>
+                    <span class="addon-desc">You provide track</span>
+                  </span>
+                  <span class="addon-price">+$10</span>
+                </label>
+                <label class="addon-checkbox">
+                  <input type="checkbox" value="sourceFiles" data-price="15" data-name="Source File Delivery">
+                  <span class="addon-content">
+                    <span class="addon-name">Source Files</span>
+                    <span class="addon-desc">Project files included</span>
+                  </span>
+                  <span class="addon-price">+$15</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="projectNotes">
+                <span class="label-icon">📝</span>
+                Initial Notes (Optional)
+              </label>
+              <textarea id="projectNotes" class="form-textarea" rows="4" placeholder="Any initial thoughts, style preferences, or questions you have about your project..."></textarea>
+              <div class="form-hint">Anything you type here is optional and will be copied into your intake email automatically after payment is confirmed.</div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="order-summary-section">
+          <div class="summary-card">
+            <div class="summary-header">
+              <div class="payment-badge">
+                <span class="badge-icon">🔒</span>
+                <div class="badge-text">
+                  <strong>Secure Payment First</strong>
+                  <span>Project details after confirmation</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="summary-body">
+              <div class="summary-row">
+                <span class="summary-label">Service</span>
+                <span class="summary-value" id="summaryService">—</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-label">Package</span>
+                <span class="summary-value" id="summaryPackage">—</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-label">Add-ons</span>
+                <span class="summary-value" id="summaryAddons">None</span>
+              </div>
+              
+              <div class="summary-divider"></div>
+              
+              <div class="summary-total">
+                <span class="total-label">Total Amount</span>
+                <span class="total-value" id="totalAmount">$0</span>
+              </div>
+
+              <button class="btn btn-primary btn-full" id="payButton" disabled>
+                Proceed to PayPal Payment
+              </button>
+
+              <div class="intake-section" id="intakeSection">
+                <button class="btn btn-secondary btn-full" id="submitIntakeButton" disabled>
+                  <span class="btn-icon">📧</span>
+                  Submit Project Details
+                </button>
+                <p class="intake-notice" id="intakeNotice">
+                  <span class="lock-icon">🔒</span>
+                  Complete payment to unlock project submission
+                </p>
+              </div>
+            </div>
+
+            <div class="payment-security">
+              <div class="security-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+                </svg>
+                Secure PayPal Processing
+              </div>
+              <div class="security-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                Guaranteed Delivery
+              </div>
+            </div>
+          </div>
+
+          <div class="info-cards">
+            <div class="info-card">
+              <strong>💎 What Happens Next?</strong>
+              <p>After payment, send your footage links + notes to shortformfactory.help@gmail.com so we can begin immediately.</p>
+            </div>
+            <div class="info-card">
+              <strong>🎯 Revisions Policy</strong>
+              <p>Basic: 0 revisions | Standard: 1 revision | Premium: 2 revisions. Revisions allowed within 7 days, within scope only.</p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-content">
+      <div class="footer-section">
+        <h3>ShortFormFactory</h3>
+        <p>Premium video editing services</p>
+      </div>
+      <div class="footer-section">
+        <h3>Legal</h3>
+        <ul class="footer-links">
+          <li><a href="/terms.html">Terms</a></li>
+          <li><a href="/privacy.html">Privacy</a></li>
+          <li><a href="/refunds.html">Refunds</a></li>
+          <li><a href="/liability.html">Liability</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2024 ShortFormFactory</p>
+    </div>
+  </footer>
+
+  <button class="back-to-top" id="backToTop" aria-label="Back to top">↑</button>
+  <canvas id="particleCanvas"></canvas>
+  <script src="/main.js"></script>
+  <script src="/paypal-config.js"></script>
+</body>
+</html>
