@@ -1,0 +1,15 @@
+{
+  "name": "shortformfactory-website",
+  "version": "1.0.0",
+  "description": "ShortFormFactory - Professional Video Editing Services",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'Static site - no build needed'"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
