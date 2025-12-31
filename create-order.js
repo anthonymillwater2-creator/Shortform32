@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     // Environment variables
     const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
     const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
-    const PAYPAL_ENV = process.env.PAYPAL_ENV || process.env.PAYPAL_MODE || 'live';
+    const PAYPAL_ENV = process.env.PAYPAL_ENV || 'live';
     const PAYPAL_CURRENCY = process.env.PAYPAL_CURRENCY || 'USD';
 
     if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
