@@ -5,9 +5,42 @@
   // Mobile menu
   const toggle = $('#mobileMenuToggle');
   const nav = $('#mainNav');
+
+  function closeNav(){
+    if(nav) nav.classList.remove('open');
+  }
+
   if(toggle && nav){
-    toggle.addEventListener('click', ()=>{
+    // Toggle on button click
+    toggle.addEventListener('click', (e)=>{
+      e.stopPropagation();
       nav.classList.toggle('open');
+    });
+
+    // Close on nav link click
+    $$('.nav-link', nav).forEach(link => {
+      link.addEventListener('click', closeNav);
+    });
+
+    // Close on outside click
+    document.addEventListener('click', (e)=>{
+      if(nav.classList.contains('open') && !nav.contains(e.target) && !toggle.contains(e.target)){
+        closeNav();
+      }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape' && nav.classList.contains('open')){
+        closeNav();
+      }
+    });
+
+    // Close on resize to desktop breakpoint
+    window.addEventListener('resize', ()=>{
+      if(window.innerWidth > 860 && nav.classList.contains('open')){
+        closeNav();
+      }
     });
   }
 
@@ -76,7 +109,6 @@
   // Preselect service from ?service=
   const params = new URLSearchParams(location.search);
   const incomingService = params.get('service');
-  const paidFlag = params.get('paid') === 'true';
 
   function formatUSD(n){ return `$${n.toFixed(2)}`; }
 
@@ -137,10 +169,10 @@
 
     const ready = Boolean(svc && selectedPackage);
     if(payBtn) payBtn.disabled = !ready || total<=0;
-    // lock intake until paid=true
-    if(intakeBtn){
-      intakeBtn.disabled = !ready || !paidFlag || total<=0;
-      intakeNotice && (intakeNotice.style.display = paidFlag? 'none':'block');
+    // intake lock/unlock is handled by paypal-config.js via sessionStorage
+    // don't override it here, just set initial disabled state
+    if(intakeBtn && !sessionStorage.getItem('sff_payment_confirmed')){
+      intakeBtn.disabled = true;
     }
   }
 
@@ -163,67 +195,9 @@
   // Add-on changes recalc
   $$('.addon-checkbox input').forEach(cb=> cb.addEventListener('change', recalc));
 
-  // Pay button -> PayPal.me
-  if(payBtn){
-    payBtn.addEventListener('click', ()=>{
-      if(!selectedService || !selectedPackage){
-        serviceError && (serviceError.style.display = !selectedService ? 'block':'none');
-        packageError && (packageError.style.display = !selectedPackage ? 'block':'none');
-        return;
-      }
-      // recompute total
-      let total=0;
-      const svc = PRICES[selectedService];
-      total += svc[selectedPackage] || 0;
-      addons.forEach(a=> total += a.price);
+  // Pay button is handled by paypal-config.js (PayPal Buttons SDK)
 
-      const amount = total.toFixed(2);
-      const link = `https://paypal.me/Shortformfactory/${amount}`;
-      window.open(link, '_blank');
-    });
-  }
-
-  // Intake mailto (only after paid=true)
-  if(intakeBtn){
-    intakeBtn.addEventListener('click', ()=>{
-      if(!selectedService || !selectedPackage) return;
-      const svc = PRICES[selectedService];
-      const pkgLabel = selectedPackage==='basic'?'Basic':selectedPackage==='standard'?'Standard':'Premium';
-      const addLines = [];
-      addons.forEach(a=>{ addLines.push(`- ${a.name} (+$${a.price})`); });
-
-      const subject = `New Order Intake – ${svc.name}`;
-      const body = [
-        `New Order Intake – ${svc.name}`,
-        ``,
-        `Package: ${pkgLabel} ($${svc[selectedPackage]})`,
-        ``,
-        `Add-ons:`,
-        addLines.length? addLines.join('\n') : '- None selected',
-        ``,
-        `Total paid (USD): ${totalAmountEl ? totalAmountEl.textContent : '$0.00'}`,
-        ``,
-        `Please paste your PayPal payment details below so we can confirm:`,
-        `- PayPal email used:`,
-        `- Transaction ID or receipt link:`,
-        ``,
-        `Footage links (Drive/Dropbox/etc.):`,
-        (notesArea && notesArea.value.trim()) || "(client will provide after payment)",
-        ``,
-        `Social handles for tagging (optional):`,
-        `TikTok: @short.formfactory`,
-        `Instagram: @short.formfactory`,
-        `YouTube: @short.formfactory`,
-        ``,
-        `Sent from ShortFormFactory order page`
-      ].join('\n');
-
-      const mailto = "mailto:ShortFormFactory.help@gmail.com"
-        + "?subject=" + encodeURIComponent(subject)
-        + "&body=" + encodeURIComponent(body);
-      window.location.href = mailto;
-    });
-  }
+  // Intake mailto - handled by paypal-config.js to include Order ID from sessionStorage
 
   // Notes hint
   if(notesArea){

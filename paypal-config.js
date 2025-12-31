@@ -1,10 +1,8 @@
-// PayPal Checkout Integration
-// Implements PayPal Orders v2 API with proper intake unlocking
-
+// PayPal Checkout Integration - Orders v2 API with Buttons SDK
 (function() {
   'use strict';
 
-  // Payment state management
+  // Payment state management via sessionStorage
   const PaymentState = {
     get: () => sessionStorage.getItem('sff_payment_confirmed') === 'true',
     set: (value) => sessionStorage.setItem('sff_payment_confirmed', value ? 'true' : 'false'),
@@ -16,93 +14,139 @@
     }
   };
 
-  // Initialize on page load
+  // Helper to get selected service and package from main.js state
+  function getOrderData() {
+    const serviceSelect = document.getElementById('serviceSelect');
+    const selectedPackageRadio = document.querySelector('input[name="sff-package"]:checked');
+    const addonCheckboxes = document.querySelectorAll('.addon-checkbox input[type="checkbox"]:checked');
+
+    if (!serviceSelect || !selectedPackageRadio) {
+      return null;
+    }
+
+    const service = serviceSelect.value;
+    const packageType = selectedPackageRadio.value;
+    const addons = Array.from(addonCheckboxes).map(cb => cb.value);
+
+    return { service, package: packageType, addons };
+  }
+
+  // Initialize on DOM ready
   document.addEventListener('DOMContentLoaded', () => {
-    initializePayPalCheckout();
+    initializePayPal();
     checkPaymentStatus();
+    setupIntakeButton();
   });
 
-  function initializePayPalCheckout() {
-    const payButton = document.getElementById('payButton');
-    if (!payButton) return;
-
-    // Replace button click handler
-    payButton.addEventListener('click', handlePaymentClick);
-  }
-
-  function checkPaymentStatus() {
-    // Check if payment was already completed
-    if (PaymentState.get()) {
-      unlockIntake();
-      showPaymentConfirmation();
-    }
-
-    // Check URL parameters for return from PayPal
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('success') === 'true') {
-      // Payment successful - confirmation already handled by PayPal button
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (urlParams.get('cancel') === 'true') {
-      showError('Payment was cancelled. Please try again.');
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }
-
-  async function handlePaymentClick(e) {
-    e.preventDefault();
-
-    const service = document.getElementById('serviceSelect')?.value;
-    const selectedPackage = document.querySelector('.package-option.selected');
-    const totalAmount = document.getElementById('totalAmount')?.textContent.replace('$', '');
-
-    if (!service || !selectedPackage || !totalAmount || totalAmount === '0') {
-      showError('Please select a service and package');
+  function initializePayPal() {
+    // Check if PayPal SDK is loaded
+    if (typeof paypal === 'undefined') {
+      console.error('PayPal SDK not loaded');
       return;
     }
 
-    // Get package details
-    const packageName = selectedPackage.dataset.package;
-
-    // Get selected addons
-    const addonCheckboxes = document.querySelectorAll('.addon-checkbox input[type="checkbox"]:checked');
-    const addons = Array.from(addonCheckboxes).map(cb => cb.dataset.name).join(', ');
-
-    // Show loading state
+    const buttonContainer = document.getElementById('paypal-button-container');
     const payButton = document.getElementById('payButton');
-    const originalText = payButton.textContent;
-    payButton.disabled = true;
-    payButton.textContent = 'Processing...';
 
-    try {
-      // Create PayPal order via our API
-      const response = await fetch('/api/create-order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: parseFloat(totalAmount),
-          service,
-          package: packageName,
-          addons: addons || undefined,
-        }),
-      });
+    if (!buttonContainer) return;
 
-      const data = await response.json();
+    // Render PayPal Buttons
+    paypal.Buttons({
+      // Create order on PayPal
+      createOrder: async function(data, actions) {
+        const orderData = getOrderData();
 
-      if (!response.ok || !data.orderID) {
-        throw new Error(data.error || 'Failed to create order');
+        if (!orderData || !orderData.service || !orderData.package) {
+          showError('Please select a service and package');
+          throw new Error('Missing service or package');
+        }
+
+        try {
+          // Call our serverless function to create the order
+          const response = await fetch('/api/create-order', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(orderData),
+          });
+
+          const responseData = await response.json();
+
+          if (!response.ok || !responseData.orderID) {
+            throw new Error(responseData.error || 'Failed to create order');
+          }
+
+          return responseData.orderID;
+        } catch (error) {
+          console.error('Create order error:', error);
+          showError('Failed to initialize payment. Please try again.');
+          throw error;
+        }
+      },
+
+      // User approved payment
+      onApprove: async function(data, actions) {
+        try {
+          // Call our serverless function to capture the payment
+          const response = await fetch('/api/capture-order', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ orderID: data.orderID }),
+          });
+
+          const captureData = await response.json();
+
+          if (captureData.success && captureData.status === 'COMPLETED') {
+            // Store payment confirmation in session
+            PaymentState.set(true);
+            PaymentState.setOrderID(data.orderID);
+
+            // Update UI
+            unlockIntake();
+            showPaymentConfirmation();
+          } else {
+            throw new Error('Payment capture failed');
+          }
+        } catch (error) {
+          console.error('Capture error:', error);
+          showError('Payment verification failed. Please contact support with Order ID: ' + data.orderID);
+        }
+      },
+
+      // User cancelled payment
+      onCancel: function(data) {
+        showError('Payment was cancelled. Please try again when ready.');
+      },
+
+      // Error occurred
+      onError: function(err) {
+        console.error('PayPal error:', err);
+        showError('An error occurred during payment. Please try again.');
+      },
+
+      // Button styling
+      style: {
+        layout: 'vertical',
+        color: 'gold',
+        shape: 'rect',
+        label: 'paypal'
       }
+    }).render('#paypal-button-container');
 
-      // Redirect to PayPal for payment
-      const approveUrl = `https://www.paypal.com/checkoutnow?token=${data.orderID}`;
-      window.location.href = approveUrl;
+    // Hide the old pay button once PayPal buttons render
+    if (payButton) {
+      payButton.style.display = 'none';
+    }
+  }
 
-    } catch (error) {
-      console.error('Payment error:', error);
-      showError('Payment initialization failed. Please try again.');
-      payButton.disabled = false;
-      payButton.textContent = originalText;
+  function checkPaymentStatus() {
+    // Check if payment was already completed (session persisted)
+    if (PaymentState.get()) {
+      unlockIntake();
+      showPaymentConfirmation();
     }
   }
 
@@ -118,144 +162,116 @@
     if (intakeNotice) {
       intakeNotice.innerHTML = '<span class="check-icon">✓</span> Payment confirmed! Ready to submit project details';
       intakeNotice.classList.add('success');
+      intakeNotice.style.display = 'block';
+      intakeNotice.style.color = '#00C851';
     }
   }
 
   function showPaymentConfirmation() {
     const payButton = document.getElementById('payButton');
+    const buttonContainer = document.getElementById('paypal-button-container');
+
     if (payButton) {
       payButton.textContent = 'Payment Completed ✓';
       payButton.disabled = true;
       payButton.classList.add('completed');
+      payButton.style.display = 'block';
+    }
+
+    // Hide PayPal buttons after payment
+    if (buttonContainer) {
+      buttonContainer.style.display = 'none';
     }
   }
 
   function showError(message) {
     // Create error notification
     const errorDiv = document.createElement('div');
-    errorDiv.className = 'payment-error';
+    errorDiv.className = 'payment-notification error';
     errorDiv.textContent = message;
     errorDiv.style.cssText = `
       position: fixed;
       top: 20px;
       right: 20px;
-      background: #ff4444;
+      background: #ff4d4f;
       color: white;
       padding: 15px 20px;
       border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       z-index: 10000;
-      animation: slideIn 0.3s ease;
+      max-width: 320px;
+      font-size: 14px;
     `;
 
     document.body.appendChild(errorDiv);
 
     // Auto-remove after 5 seconds
     setTimeout(() => {
-      errorDiv.style.animation = 'slideOut 0.3s ease';
+      errorDiv.style.opacity = '0';
+      errorDiv.style.transition = 'opacity 0.3s ease';
       setTimeout(() => errorDiv.remove(), 300);
     }, 5000);
   }
 
-  // Handle intake form submission
-  document.addEventListener('DOMContentLoaded', () => {
+  function setupIntakeButton() {
     const submitButton = document.getElementById('submitIntakeButton');
-    if (submitButton) {
-      submitButton.addEventListener('click', handleIntakeSubmit);
-    }
-  });
+    if (!submitButton) return;
+
+    submitButton.addEventListener('click', handleIntakeSubmit);
+  }
 
   function handleIntakeSubmit(e) {
     e.preventDefault();
 
+    // Verify payment
     if (!PaymentState.get()) {
       showError('Please complete payment first');
       return;
     }
 
-    // Get all form data
-    const service = document.getElementById('serviceSelect')?.value;
-    const selectedPackage = document.querySelector('.package-option.selected')?.dataset.package;
-    const projectNotes = document.getElementById('projectNotes')?.value || '';
-    const totalAmount = document.getElementById('totalAmount')?.textContent;
+    // Get order data
+    const orderData = getOrderData();
+    if (!orderData) {
+      showError('Please select a service and package');
+      return;
+    }
 
-    // Get selected addons
-    const addonCheckboxes = document.querySelectorAll('.addon-checkbox input[type="checkbox"]:checked');
-    const addons = Array.from(addonCheckboxes).map(cb => cb.dataset.name).join(', ');
+    const projectNotes = document.getElementById('projectNotes')?.value || 'None provided';
+    const totalAmount = document.getElementById('totalAmount')?.textContent || '$0.00';
+    const orderID = PaymentState.getOrderID() || 'N/A';
 
     // Build email body
+    const serviceName = document.getElementById('summaryService')?.textContent || orderData.service;
+    const packageName = document.getElementById('summaryPackage')?.textContent || orderData.package;
+    const addonsText = document.getElementById('summaryAddons')?.textContent || 'None';
+
     const emailBody = `
-Service: ${service}
-Package: ${selectedPackage}
-Add-ons: ${addons || 'None'}
+New Order Intake – ${serviceName}
+
+Package: ${packageName}
+Add-ons: ${addonsText}
 Total Paid: ${totalAmount}
-Order ID: ${PaymentState.getOrderID()}
+PayPal Order ID: ${orderID}
 
 Initial Notes:
-${projectNotes || 'None provided'}
+${projectNotes}
 
-Next steps: Please send your footage links to this email.
+Footage Links (Drive/Dropbox/etc.):
+(Please provide your footage links below)
+
+Social handles for tagging (optional):
+TikTok: @short.formfactory
+Instagram: @short.formfactory
+YouTube: @short.formfactory
+
+Sent from ShortFormFactory order page
     `.trim();
 
     // Create mailto link
-    const mailto = `mailto:shortformfactory.help@gmail.com?subject=Project Submission - ${service}&body=${encodeURIComponent(emailBody)}`;
+    const mailto = `mailto:shortformfactory.help@gmail.com?subject=${encodeURIComponent('New Order Intake – ' + serviceName)}&body=${encodeURIComponent(emailBody)}`;
 
     // Open email client
     window.location.href = mailto;
-
-    // Show success message
-    showError = function(msg) {}; // Override temporarily
-    const successDiv = document.createElement('div');
-    successDiv.className = 'payment-error';
-    successDiv.textContent = 'Email client opened! Please send the email to complete your submission.';
-    successDiv.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: #00C851;
-      color: white;
-      padding: 15px 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      z-index: 10000;
-    `;
-    document.body.appendChild(successDiv);
-    setTimeout(() => successDiv.remove(), 5000);
   }
-
-  // Handle PayPal return (when user comes back after payment)
-  window.addEventListener('message', async (event) => {
-    // Listen for PayPal messages
-    if (event.data && event.data.action === 'paypal_payment_complete') {
-      const orderID = event.data.orderID;
-
-      if (orderID) {
-        try {
-          // Capture the payment
-          const response = await fetch('/api/capture-order', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ orderID }),
-          });
-
-          const data = await response.json();
-
-          if (data.success) {
-            PaymentState.set(true);
-            PaymentState.setOrderID(orderID);
-            unlockIntake();
-            showPaymentConfirmation();
-          } else {
-            throw new Error('Payment capture failed');
-          }
-        } catch (error) {
-          console.error('Capture error:', error);
-          showError('Payment verification failed. Please contact support.');
-        }
-      }
-    }
-  });
 
 })();
