@@ -15,9 +15,10 @@ export default async function handler(req, res) {
     // Get PayPal credentials
     const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
     const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
-    const PAYPAL_API_BASE = process.env.PAYPAL_MODE === 'live'
-      ? 'https://api-m.paypal.com'
-      : 'https://api-m.sandbox.paypal.com';
+    const PAYPAL_ENV = process.env.PAYPAL_ENV || 'live';
+    const PAYPAL_API_BASE = PAYPAL_ENV === 'sandbox'
+      ? 'https://api-m.sandbox.paypal.com'
+      : 'https://api-m.paypal.com';
 
     if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET || !webhookId) {
       console.error('PayPal webhook configuration missing');
