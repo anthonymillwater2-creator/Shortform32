@@ -7,7 +7,9 @@
     "dev": "vercel dev",
     "build": "echo 'Static site - no build needed'"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@vercel/speed-insights": "^1.0.0"
+  },
   "devDependencies": {},
   "engines": {
     "node": ">=18.0.0"
