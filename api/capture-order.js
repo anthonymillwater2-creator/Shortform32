@@ -57,6 +57,10 @@ export default async function handler(req, res) {
 
     const captureData = await captureResponse.json();
 
+    // Enhanced logging for debugging
+    console.log('PayPal Capture Response Status:', captureResponse.status);
+    console.log('PayPal Capture Data:', JSON.stringify(captureData, null, 2));
+
     if (captureData.status === 'COMPLETED') {
       // Payment successful
       return res.status(200).json({
@@ -66,10 +70,13 @@ export default async function handler(req, res) {
         amount: captureData.purchase_units[0].payments.captures[0].amount
       });
     } else {
-      // Payment not completed
+      // Payment not completed - return detailed error
+      console.error('Capture failed with status:', captureData.status);
       return res.status(400).json({
         success: false,
-        details: captureData
+        status: captureData.status,
+        details: captureData,
+        message: captureData.message || 'Payment capture failed'
       });
     }
 
