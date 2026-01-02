@@ -129,6 +129,7 @@ a:hover{text-shadow:0 0 16px rgba(198,255,64,.6)}
 
 .page-content{max-width:1100px;margin:0 auto;padding:18px}
 .simple-content{background:#0b0b0b;border:1px solid #1b1b1b;border-radius:16px;padding:18px}
+.contact-social{display:flex;gap:12px;margin:24px 0}
 
 .footer{border-top:1px solid #111;margin-top:24px}
 .footer-content{max-width:1200px;margin:0 auto;padding:18px;display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
