@@ -27,8 +27,9 @@ a:hover{text-shadow:0 0 16px rgba(198,255,64,.6)}
 .nav-link{padding:8px 10px;border-radius:10px}
 .nav-link:hover{background:#0f0f0f;box-shadow:var(--shadow)}
 .social-links{display:flex;gap:12px;margin-left:12px}
-.social-icon{display:grid;place-items:center;height:36px;width:36px;border-radius:10px;background:#0e0e0e}
-.social-icon:hover{box-shadow:0 0 22px rgba(198,255,64,.5);color:#000;background:var(--neon)}
+.social-icon{display:grid;place-items:center;height:36px;width:36px;border-radius:10px;background:#0e0e0e;color:#fff;transition:.22s all}
+.social-icon svg{fill:currentColor}
+.social-icon:hover{box-shadow:0 0 22px rgba(198,255,64,.5);color:#000;background:var(--neon);transform:translateY(-2px)}
 
 .mobile-menu-toggle{display:none;margin-left:auto;background:transparent;border:0;cursor:pointer}
 .mobile-menu-toggle span{display:block;width:24px;height:2px;background:#fff;margin:5px 0;border-radius:2px}
@@ -46,6 +47,7 @@ a:hover{text-shadow:0 0 16px rgba(198,255,64,.6)}
 .pulse-dot{height:8px;width:8px;border-radius:999px;background:var(--neon);box-shadow:0 0 10px rgba(198,255,64,.9)}
 .hero-title{font-size:clamp(32px,6vw,56px);margin:18px 0 8px}
 .hero-subtitle{color:var(--muted);max-width:720px;margin:0 auto 24px}
+.hero-social{display:flex;gap:12px;justify-content:center;margin-top:24px}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:12px;padding:14px 20px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:.22s transform,.22s box-shadow}
 .btn-primary{background:var(--neon);color:#000;box-shadow:0 0 12px rgba(198,255,64,.35)}
@@ -130,6 +132,7 @@ a:hover{text-shadow:0 0 16px rgba(198,255,64,.6)}
 
 .footer{border-top:1px solid #111;margin-top:24px}
 .footer-content{max-width:1200px;margin:0 auto;padding:18px;display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.footer-social{display:flex;gap:12px;margin-top:12px}
 .footer-links{list-style:none;padding:0;margin:0}
 .footer-links li{margin:6px 0}
 .footer-bottom{border-top:1px solid #111;max-width:1200px;margin:0 auto;padding:12px 18px;color:var(--muted);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
