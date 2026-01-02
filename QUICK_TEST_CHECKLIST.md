@@ -6,13 +6,15 @@
 
 Go to: https://vercel.com/dashboard → Select "Shortform32" → Settings → Environment Variables
 
-Add these 3 variables (click "Add" for each):
+Add these 3 **REQUIRED** variables (click "Add" for each):
 
 | Variable Name | Value | Notes |
 |---------------|-------|-------|
 | `PAYPAL_CLIENT_ID` | `AatxDoez5Fdm48uLKgvEFbVxWCbjrq0N1mSQv_toBzfiFfJLdGblcwysOHxA5A1B1c1XXPtTOohdq3Up` | Your sandbox client ID (currently in order.html) |
 | `PAYPAL_CLIENT_SECRET` | `YOUR_SANDBOX_SECRET_HERE` | Get from PayPal Developer Dashboard |
 | `PAYPAL_ENV` | `sandbox` | MUST be "sandbox" for testing |
+
+**Note about Webhooks**: `PAYPAL_WEBHOOK_ID` is OPTIONAL and NOT needed for testing. Payments work perfectly without it. See WEBHOOK_SETUP.md for details.
 
 **To get your Client Secret:**
 1. Go to https://developer.paypal.com/dashboard/applications/sandbox

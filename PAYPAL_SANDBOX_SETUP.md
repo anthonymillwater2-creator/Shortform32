@@ -24,6 +24,11 @@ You MUST set these environment variables in your Vercel project dashboard:
    - Set to: `USD`
    - Defaults to USD if not set
 
+5. **PAYPAL_WEBHOOK_ID** (Optional - NOT needed for testing)
+   - Only required for production webhook notifications
+   - See WEBHOOK_SETUP.md for complete details
+   - Skip this for sandbox testing
+
 ## 📋 How to Set Environment Variables in Vercel
 
 1. Go to https://vercel.com/dashboard
