@@ -21,11 +21,22 @@ export default async function handler(req, res) {
     const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
     const PAYPAL_ENV = process.env.PAYPAL_ENV || 'live';
 
+    // Runtime diagnostics (safe - no secrets)
+    console.log('[capture-order] Runtime check:', {
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      NODE_ENV: process.env.NODE_ENV,
+      hasClientId: !!PAYPAL_CLIENT_ID,
+      hasClientSecret: !!PAYPAL_CLIENT_SECRET,
+      clientIdLength: PAYPAL_CLIENT_ID ? PAYPAL_CLIENT_ID.length : 0,
+      env: PAYPAL_ENV
+    });
+
     const PAYPAL_API_BASE = PAYPAL_ENV === 'sandbox'
       ? 'https://api-m.sandbox.paypal.com'
       : 'https://api-m.paypal.com';
 
     if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
+      console.error('[capture-order] Missing credentials');
       return res.status(500).json({ error: 'PayPal configuration missing' });
     }
 
