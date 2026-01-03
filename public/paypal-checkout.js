@@ -1,18 +1,9 @@
-// PayPal Checkout Integration - Orders v2 API with Buttons SDK
-// FIXED: No race conditions, explicit button triggering, visible diagnostics
+// PayPal Checkout Integration - FIXED for iOS Safari
+// Simplified with visible debugging
 (function() {
   'use strict';
 
-  // Global state
-  let paypalSDKLoaded = false;
-  let paypalButtonsRendered = false;
-  const diagnostics = {
-    configFetch: { status: 'pending', data: null },
-    sdkLoad: { status: 'pending', error: null },
-    buttonsRender: { status: 'pending', error: null },
-    createOrder: { status: 'pending', orderID: null },
-    captureOrder: { status: 'pending', captureID: null }
-  };
+  const dbg = window.dbg || console.log;
 
   // Payment state management via sessionStorage
   const PaymentState = {
@@ -51,112 +42,51 @@
 
   // Initialize on DOM ready
   document.addEventListener('DOMContentLoaded', () => {
+    dbg('[checkout] DOMContentLoaded - initializing');
     setupPayButton();
     checkPaymentStatus();
     setupIntakeButton();
-    setupDiagnosticsPanel();
-    captureJSErrors();
+    probeOverlayIssues();
   });
 
-  // Capture JavaScript errors for diagnostics
-  function captureJSErrors() {
-    window.addEventListener('error', (e) => {
-      updateDiagnostics('jsError', { message: e.message, file: e.filename, line: e.lineno });
-    });
-    window.addEventListener('unhandledrejection', (e) => {
-      updateDiagnostics('jsError', { message: 'Promise rejection: ' + e.reason });
-    });
-  }
+  // Probe for overlay issues after buttons mount
+  function probeOverlayIssues() {
+    setTimeout(() => {
+      const container = document.getElementById('paypal-button-container');
+      if (!container) return;
 
-  // Setup diagnostics panel (collapsible)
-  function setupDiagnosticsPanel() {
-    const container = document.getElementById('paypal-button-container');
-    if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
 
-    const panel = document.createElement('div');
-    panel.id = 'paypal-diagnostics';
-    panel.style.cssText = `
-      margin-top: 15px;
-      padding: 12px;
-      background: #0e0e0e;
-      border: 1px solid #333;
-      border-radius: 8px;
-      font-size: 12px;
-      font-family: monospace;
-      display: none;
-    `;
-    panel.innerHTML = `
-      <div style="margin-bottom: 8px; font-weight: 700; color: #ffc107;">🔍 PayPal Diagnostics</div>
-      <div id="diag-content"></div>
-      <button id="diag-toggle" style="margin-top: 8px; padding: 4px 8px; background: #1b1b1b; color: #fff; border: 1px solid #333; border-radius: 4px; cursor: pointer; font-size: 11px;">Show Details</button>
-    `;
-    container.parentNode.insertBefore(panel, container.nextSibling);
-
-    document.getElementById('diag-toggle')?.addEventListener('click', toggleDiagnostics);
-  }
-
-  function toggleDiagnostics() {
-    const content = document.getElementById('diag-content');
-    const toggle = document.getElementById('diag-toggle');
-    if (!content || !toggle) return;
-
-    if (content.style.display === 'none' || !content.style.display) {
-      content.style.display = 'block';
-      toggle.textContent = 'Hide Details';
-      updateDiagnosticsDisplay();
-    } else {
-      content.style.display = 'none';
-      toggle.textContent = 'Show Details';
-    }
-  }
-
-  function updateDiagnostics(key, value) {
-    if (diagnostics[key]) {
-      diagnostics[key] = { ...diagnostics[key], ...value };
-    } else {
-      diagnostics[key] = value;
-    }
-    updateDiagnosticsDisplay();
-  }
-
-  function updateDiagnosticsDisplay() {
-    const content = document.getElementById('diag-content');
-    const panel = document.getElementById('paypal-diagnostics');
-    if (!content) return;
-
-    let html = '';
-    for (const [key, value] of Object.entries(diagnostics)) {
-      const status = value.status || 'unknown';
-      const icon = status === 'success' ? '✓' : status === 'error' ? '✗' : '○';
-      const color = status === 'success' ? '#00C851' : status === 'error' ? '#ff4d4f' : '#666';
-
-      html += `<div style="margin: 4px 0; color: ${color};">${icon} ${key}: ${JSON.stringify(value, null, 2).substring(0, 200)}</div>`;
-    }
-
-    content.innerHTML = html;
-
-    // Show panel if there's an error
-    const hasError = Object.values(diagnostics).some(v => v.status === 'error' || v.error);
-    if (hasError && panel) {
-      panel.style.display = 'block';
-      content.style.display = 'block';
-      document.getElementById('diag-toggle').textContent = 'Hide Details';
-    }
+      const topElement = document.elementFromPoint(centerX, centerY);
+      if (topElement) {
+        dbg(`TOP ELEMENT @ PayPal center: ${topElement.tagName}.${topElement.className || ''} id=${topElement.id || 'none'}`);
+      } else {
+        dbg('TOP ELEMENT @ PayPal center: null (off-screen?)');
+      }
+    }, 2000); // Wait 2s for buttons to render
   }
 
   // Setup the "Proceed to PayPal Payment" button to trigger PayPal loading
   function setupPayButton() {
     const payButton = document.getElementById('payButton');
-    if (!payButton) return;
+    if (!payButton) {
+      dbg('[checkout] payButton not found');
+      return;
+    }
+
+    dbg('[checkout] payButton found - adding click handler');
 
     payButton.addEventListener('click', async (e) => {
       e.preventDefault();
+      dbg('[checkout] payButton clicked');
 
       // Validate selection
       const orderData = getOrderData();
       if (!orderData || !orderData.service || !orderData.package) {
         showError('Please select a service and package first');
-        updateDiagnostics('validation', { status: 'error', error: 'No service or package selected' });
+        dbg('[checkout] Validation failed - no service/package');
         return;
       }
 
@@ -164,19 +94,20 @@
       const total = totalEl ? parseFloat(totalEl.textContent.replace(/[^0-9.]/g, '')) : 0;
       if (total <= 0) {
         showError('Total amount must be greater than $0');
-        updateDiagnostics('validation', { status: 'error', error: 'Total is $0' });
+        dbg('[checkout] Validation failed - total is $0');
         return;
       }
 
-      updateDiagnostics('validation', { status: 'success', total, orderData });
+      dbg(`[checkout] Validation passed - service=${orderData.service}, package=${orderData.package}, total=$${total}`);
 
       // Start PayPal initialization
       payButton.disabled = true;
       payButton.textContent = 'Loading PayPal...';
 
       try {
-        await initializePayPal();
+        await mountPayPalButtons();
       } catch (error) {
+        dbg(`[checkout] mountPayPalButtons error: ${error.message}`);
         showError('Failed to load PayPal: ' + error.message);
         payButton.disabled = false;
         payButton.textContent = 'Retry PayPal Payment';
@@ -184,7 +115,9 @@
     });
   }
 
-  async function initializePayPal() {
+  async function mountPayPalButtons() {
+    dbg('[checkout] mountPayPalButtons start');
+
     const buttonContainer = document.getElementById('paypal-button-container');
     const payButton = document.getElementById('payButton');
 
@@ -192,37 +125,41 @@
       throw new Error('PayPal button container not found');
     }
 
-    // Check if PayPal SDK is already loaded
-    if (typeof window.paypal === 'undefined') {
-      updateDiagnostics('sdkLoad', { status: 'error', error: 'PayPal SDK not loaded. Check paypal-loader.js' });
-      throw new Error('PayPal SDK not loaded');
+    // Load SDK (will use cached if already loaded)
+    dbg('[checkout] Calling loadPayPalSDK');
+    const sdkLoaded = await window.loadPayPalSDK();
+
+    if (!sdkLoaded) {
+      throw new Error('SDK load returned false');
     }
 
-    updateDiagnostics('sdkLoad', { status: 'success' });
-    paypalSDKLoaded = true;
-
-    // Don't re-render if already rendered
-    if (paypalButtonsRendered) {
-      buttonContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
+    // Verify SDK is ready
+    if (!window.paypal || !window.paypal.Buttons) {
+      throw new Error('window.paypal.Buttons not available after load');
     }
+
+    dbg('[checkout] SDK ready - window.paypal.Buttons exists');
+
+    // Clear container
+    buttonContainer.innerHTML = '';
+
+    // Render PayPal Buttons
+    dbg('[checkout] Calling paypal.Buttons().render()');
 
     try {
-      // Render PayPal Buttons
       await window.paypal.Buttons({
         // Create order on PayPal
-        createOrder: async function(data, actions) {
+        createOrder: async function() {
+          dbg('[checkout] createOrder start');
           const orderData = getOrderData();
 
           if (!orderData || !orderData.service || !orderData.package) {
             const error = 'Missing service or package';
-            updateDiagnostics('createOrder', { status: 'error', error });
+            dbg(`[checkout] createOrder error: ${error}`);
             throw new Error(error);
           }
 
           try {
-            updateDiagnostics('createOrder', { status: 'pending', orderData });
-
             // Call our serverless function to create the order
             const response = await fetch('/api/create-order', {
               method: 'POST',
@@ -233,26 +170,25 @@
             });
 
             const responseData = await response.json();
+            dbg(`[checkout] create-order response: ok=${response.ok}, hasOrderID=${!!responseData.orderID}`);
 
             if (!response.ok || !responseData.orderID) {
               throw new Error(responseData.error || 'Failed to create order');
             }
 
-            updateDiagnostics('createOrder', { status: 'success', orderID: responseData.orderID });
+            dbg(`[checkout] createOrder success - orderID=${responseData.orderID}`);
             return responseData.orderID;
           } catch (error) {
-            console.error('Create order error:', error);
-            updateDiagnostics('createOrder', { status: 'error', error: error.message });
+            dbg(`[checkout] createOrder fetch error: ${error.message}`);
             showError('Failed to initialize payment. Please try again.');
             throw error;
           }
         },
 
         // User approved payment
-        onApprove: async function(data, actions) {
+        onApprove: async function(data) {
+          dbg(`[checkout] onApprove - orderID=${data.orderID}`);
           try {
-            updateDiagnostics('captureOrder', { status: 'pending', orderID: data.orderID });
-
             // Call our serverless function to capture the payment
             const response = await fetch('/api/capture-order', {
               method: 'POST',
@@ -263,6 +199,7 @@
             });
 
             const captureData = await response.json();
+            dbg(`[checkout] capture-order response: ok=${response.ok}, status=${captureData.status}`);
 
             if (captureData.success && captureData.status === 'COMPLETED') {
               // Store payment confirmation in session
@@ -271,11 +208,7 @@
               PaymentState.setCaptureID(captureData.captureID);
               PaymentState.setAmount(JSON.stringify(captureData.amount));
 
-              updateDiagnostics('captureOrder', {
-                status: 'success',
-                captureID: captureData.captureID,
-                amount: captureData.amount
-              });
+              dbg(`[checkout] ✓ Payment captured - captureID=${captureData.captureID}`);
 
               // Update UI
               unlockIntake();
@@ -284,15 +217,14 @@
               throw new Error('Payment capture failed');
             }
           } catch (error) {
-            console.error('Capture error:', error);
-            updateDiagnostics('captureOrder', { status: 'error', error: error.message });
+            dbg(`[checkout] capture error: ${error.message}`);
             showError('Payment verification failed. Please contact support with Order ID: ' + data.orderID);
           }
         },
 
         // User cancelled payment
         onCancel: function(data) {
-          updateDiagnostics('paymentFlow', { status: 'cancelled', orderID: data.orderID });
+          dbg(`[checkout] onCancel - orderID=${data.orderID || 'none'}`);
           showError('Payment was cancelled. Please try again when ready.');
           if (payButton) {
             payButton.disabled = false;
@@ -302,8 +234,7 @@
 
         // Error occurred
         onError: function(err) {
-          console.error('PayPal error:', err);
-          updateDiagnostics('paypalError', { status: 'error', error: err.toString() });
+          dbg(`[checkout] onError: ${String(err)}`);
           showError('An error occurred during payment. Please try again.');
           if (payButton) {
             payButton.disabled = false;
@@ -320,8 +251,7 @@
         }
       }).render('#paypal-button-container');
 
-      paypalButtonsRendered = true;
-      updateDiagnostics('buttonsRender', { status: 'success' });
+      dbg('[checkout] ✓ Buttons rendered successfully');
 
       // Hide the trigger button, show the PayPal buttons
       if (payButton) {
@@ -332,8 +262,7 @@
       buttonContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
     } catch (error) {
-      console.error('PayPal render error:', error);
-      updateDiagnostics('buttonsRender', { status: 'error', error: error.message });
+      dbg(`[checkout] Buttons render error: ${error.message}`);
       throw error;
     }
   }
@@ -341,6 +270,7 @@
   function checkPaymentStatus() {
     // Check if payment was already completed (session persisted)
     if (PaymentState.get()) {
+      dbg('[checkout] Payment already completed - showing receipt');
       // Reconstruct captureData from session storage
       const captureData = {
         orderID: PaymentState.getOrderID(),
@@ -350,7 +280,6 @@
 
       unlockIntake();
       showPaymentConfirmation(captureData);
-      updateDiagnostics('paymentStatus', { status: 'already_completed', captureData });
     }
   }
 
@@ -494,15 +423,5 @@ Sent from ShortFormFactory order page
     // Open email client
     window.location.href = mailto;
   }
-
-  // Expose for testing
-  window.sffPayPal = {
-    diagnostics,
-    showDiagnostics: () => {
-      const panel = document.getElementById('paypal-diagnostics');
-      if (panel) panel.style.display = 'block';
-      toggleDiagnostics();
-    }
-  };
 
 })();

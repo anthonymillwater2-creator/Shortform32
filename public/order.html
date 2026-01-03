@@ -11,6 +11,17 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" href="/favicon.ico">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  /* PayPal iOS Safari tap fix */
+  #paypal-button-container {
+    position: relative !important;
+    z-index: 50 !important;
+    pointer-events: auto !important;
+  }
+  #paypal-button-container > * {
+    pointer-events: auto !important;
+  }
+</style>
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
 </script>
@@ -206,6 +217,9 @@
               <!-- PayPal Button Container -->
               <div id="paypal-button-container" style="margin-top: 12px;"></div>
 
+              <!-- Debug Panel for iOS Safari diagnostics -->
+              <pre id="pp-debug" style="white-space:pre-wrap;color:#C6FF40;font-size:12px;line-height:1.25;margin-top:12px;max-height:200px;overflow-y:auto;background:#0a0a0a;padding:8px;border-radius:4px;"></pre>
+
               <div class="intake-section" id="intakeSection">
                 <button class="btn btn-secondary btn-full" id="submitIntakeButton" disabled>
                   <span class="btn-icon">📧</span>
@@ -295,6 +309,7 @@
 
   <script src="/main.js"></script>
   <script src="/paypal-loader.js"></script>
+  <script src="/paypal-checkout.js"></script>
   <script>
     window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
   </script>
