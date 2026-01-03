@@ -63,11 +63,13 @@ export default async function handler(req, res) {
 
     if (captureData.status === 'COMPLETED') {
       // Payment successful
+      const capture = captureData.purchase_units[0].payments.captures[0];
       return res.status(200).json({
         success: true,
         orderID: captureData.id,
+        captureID: capture.id,
         status: captureData.status,
-        amount: captureData.purchase_units[0].payments.captures[0].amount
+        amount: capture.amount
       });
     } else {
       // Payment not completed - return detailed error

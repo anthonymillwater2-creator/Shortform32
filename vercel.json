@@ -1,23 +1,25 @@
 {
-  "version": 2,
-  "builds": [
+  "redirects": [
     {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
+      "source": "/donations",
+      "destination": "/",
+      "permanent": true
     },
     {
-      "src": "public/**",
-      "use": "@vercel/static"
+      "source": "/donations.html",
+      "destination": "/",
+      "permanent": true
     }
   ],
-  "routes": [
+  "headers": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/public/$1"
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
+        }
+      ]
     }
   ]
 }

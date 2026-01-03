@@ -241,7 +241,7 @@
             </div>
             <div class="info-card">
               <strong>🎯 Revisions Policy</strong>
-              <p>Basic: 0 revisions | Standard: 1 revision | Premium: 2 revisions. Revisions allowed within 7 days, within scope only.</p>
+              <p>Basic: 0 revisions. Standard: 1 revision. Premium: 2 revisions. Revisions must be requested within 7 days of delivery and must be within scope (no new footage, no new creative direction, no change of service type). Out-of-scope changes require a new order or add-on.</p>
             </div>
           </div>
         </aside>
@@ -290,11 +290,11 @@
   <button class="back-to-top" id="backToTop" aria-label="Back to top">↑</button>
   <canvas id="particleCanvas"></canvas>
 
-  <!-- PayPal JS SDK - SANDBOX for testing -->
-  <script src="https://www.paypal.com/sdk/js?client-id=AatxDoez5Fdm48uLKgvEFbVxWCbjrq0N1mSQv_toBzfiFfJLdGblcwysOHxA5A1B1c1XXPtTOohdq3Up&currency=USD"></script>
+  <!-- PayPal SDK loaded dynamically based on environment -->
+  
 
   <script src="/main.js"></script>
-  <script src="/paypal-config.js"></script>
+  <script src="/paypal-loader.js"></script>
   <script>
     window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
   </script>

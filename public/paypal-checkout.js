@@ -8,9 +8,15 @@
     set: (value) => sessionStorage.setItem('sff_payment_confirmed', value ? 'true' : 'false'),
     getOrderID: () => sessionStorage.getItem('sff_order_id'),
     setOrderID: (id) => sessionStorage.setItem('sff_order_id', id),
+    getCaptureID: () => sessionStorage.getItem('sff_capture_id'),
+    setCaptureID: (id) => sessionStorage.setItem('sff_capture_id', id),
+    getAmount: () => sessionStorage.getItem('sff_amount'),
+    setAmount: (amount) => sessionStorage.setItem('sff_amount', amount),
     clear: () => {
       sessionStorage.removeItem('sff_payment_confirmed');
       sessionStorage.removeItem('sff_order_id');
+      sessionStorage.removeItem('sff_capture_id');
+      sessionStorage.removeItem('sff_amount');
     }
   };
 
@@ -102,11 +108,13 @@
           if (captureData.success && captureData.status === 'COMPLETED') {
             // Store payment confirmation in session
             PaymentState.set(true);
-            PaymentState.setOrderID(data.orderID);
+            PaymentState.setOrderID(captureData.orderID);
+            PaymentState.setCaptureID(captureData.captureID);
+            PaymentState.setAmount(JSON.stringify(captureData.amount));
 
             // Update UI
             unlockIntake();
-            showPaymentConfirmation();
+            showPaymentConfirmation(captureData);
           } else {
             throw new Error('Payment capture failed');
           }
@@ -145,8 +153,15 @@
   function checkPaymentStatus() {
     // Check if payment was already completed (session persisted)
     if (PaymentState.get()) {
+      // Reconstruct captureData from session storage
+      const captureData = {
+        orderID: PaymentState.getOrderID(),
+        captureID: PaymentState.getCaptureID(),
+        amount: PaymentState.getAmount() ? JSON.parse(PaymentState.getAmount()) : null
+      };
+
       unlockIntake();
-      showPaymentConfirmation();
+      showPaymentConfirmation(captureData);
     }
   }
 
@@ -167,20 +182,35 @@
     }
   }
 
-  function showPaymentConfirmation() {
+  function showPaymentConfirmation(captureData) {
     const payButton = document.getElementById('payButton');
     const buttonContainer = document.getElementById('paypal-button-container');
-
-    if (payButton) {
-      payButton.textContent = 'Payment Completed ✓';
-      payButton.disabled = true;
-      payButton.classList.add('completed');
-      payButton.style.display = 'block';
-    }
 
     // Hide PayPal buttons after payment
     if (buttonContainer) {
       buttonContainer.style.display = 'none';
+    }
+
+    // Display receipt with order/capture IDs
+    if (payButton && captureData) {
+      const amount = captureData.amount ? `${captureData.amount.currency_code} ${captureData.amount.value}` : 'N/A';
+
+      payButton.innerHTML = `
+        <div style="text-align: left; font-size: 13px; line-height: 1.6;">
+          <div style="font-weight: 800; color: #00C851; margin-bottom: 8px;">✓ Payment Completed</div>
+          <div style="font-weight: 400; font-size: 12px; color: #9aa0a6;">
+            <div><strong>Amount:</strong> ${amount}</div>
+            <div style="margin-top: 4px;"><strong>Order ID:</strong><br/><code style="font-size: 11px; background: #0e0e0e; padding: 2px 4px; border-radius: 4px;">${captureData.orderID || 'N/A'}</code></div>
+            <div style="margin-top: 4px;"><strong>Capture ID:</strong><br/><code style="font-size: 11px; background: #0e0e0e; padding: 2px 4px; border-radius: 4px;">${captureData.captureID || 'N/A'}</code></div>
+          </div>
+          <div style="margin-top: 8px; font-size: 11px; color: #666;">Screenshot this receipt for your records</div>
+        </div>
+      `;
+      payButton.disabled = true;
+      payButton.classList.add('completed');
+      payButton.style.display = 'block';
+      payButton.style.height = 'auto';
+      payButton.style.padding = '16px';
     }
   }
 
@@ -239,6 +269,7 @@
     const projectNotes = document.getElementById('projectNotes')?.value || 'None provided';
     const totalAmount = document.getElementById('totalAmount')?.textContent || '$0.00';
     const orderID = PaymentState.getOrderID() || 'N/A';
+    const captureID = PaymentState.getCaptureID() || 'N/A';
 
     // Build email body
     const serviceName = document.getElementById('summaryService')?.textContent || orderData.service;
@@ -252,6 +283,7 @@ Package: ${packageName}
 Add-ons: ${addonsText}
 Total Paid: ${totalAmount}
 PayPal Order ID: ${orderID}
+PayPal Capture ID: ${captureID}
 
 Initial Notes:
 ${projectNotes}
