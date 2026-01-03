@@ -9,17 +9,25 @@
       const response = await fetch('/api/paypal-config');
 
       if (!response.ok) {
-        throw new Error('Failed to fetch PayPal configuration');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'CONFIG_FETCH_FAILED');
       }
 
       const config = await response.json();
+
+      // Check for MISSING_ENV error from server
+      if (config.error === 'MISSING_ENV') {
+        showSDKError('MISSING_ENV', config.message, config.instructions, config.missing);
+        return;
+      }
 
       if (!config.clientID) {
         throw new Error('PayPal client ID not configured');
       }
 
       // Build PayPal SDK URL with fetched configuration
-      const sdkURL = `https://www.paypal.com/sdk/js?client-id=${config.clientID}&currency=${config.currency || 'USD'}`;
+      // Enable all funding sources: card (guest checkout), Apple Pay, Google Pay
+      const sdkURL = `https://www.paypal.com/sdk/js?client-id=${config.clientID}&currency=${config.currency || 'USD'}&intent=capture&components=buttons`;
 
       // Create and append PayPal SDK script tag
       const script = document.createElement('script');
@@ -39,25 +47,52 @@
 
       script.onerror = function() {
         console.error('Failed to load PayPal SDK');
-        showSDKError();
+        showSDKError('SDK_LOAD_FAILED', 'PayPal SDK failed to load from PayPal servers', 'Check internet connection and try again');
       };
 
       document.body.appendChild(script);
 
     } catch (error) {
       console.error('PayPal loader error:', error);
-      showSDKError();
+      showSDKError('CONFIG_ERROR', error.message);
     }
   }
 
-  function showSDKError() {
+  function showSDKError(errorCode, message, instructions, missingVars) {
     const buttonContainer = document.getElementById('paypal-button-container');
-    if (buttonContainer) {
-      buttonContainer.innerHTML = `
-        <div style="padding: 15px; background: #ff4d4f; color: white; border-radius: 8px; text-align: center;">
-          ⚠️ Payment system unavailable. Please contact support.
-        </div>
-      `;
+    const payButton = document.getElementById('payButton');
+
+    if (!buttonContainer) return;
+
+    let errorHTML = `
+      <div style="padding: 16px; background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; color: #856404; text-align: left; font-size: 13px; line-height: 1.6;">
+        <div style="font-weight: 700; margin-bottom: 8px; font-size: 14px;">⚠️ Payment System Unavailable</div>
+        <div style="margin-bottom: 6px;"><strong>Error:</strong> ${errorCode || 'UNKNOWN'}</div>
+    `;
+
+    if (message) {
+      errorHTML += `<div style="margin-bottom: 6px;">${message}</div>`;
+    }
+
+    if (missingVars && missingVars.length > 0) {
+      errorHTML += `<div style="margin-bottom: 6px;"><strong>Missing:</strong> ${missingVars.join(', ')}</div>`;
+    }
+
+    if (instructions) {
+      errorHTML += `<div style="margin-top: 10px; padding: 10px; background: white; border-radius: 4px; font-size: 12px;">${instructions}</div>`;
+    }
+
+    errorHTML += `
+        <div style="margin-top: 12px; font-size: 12px; opacity: 0.8;">Contact shortformfactory.help@gmail.com if this persists.</div>
+      </div>
+    `;
+
+    buttonContainer.innerHTML = errorHTML;
+
+    // Disable the pay button if it exists
+    if (payButton) {
+      payButton.disabled = true;
+      payButton.style.opacity = '0.5';
     }
   }
 
