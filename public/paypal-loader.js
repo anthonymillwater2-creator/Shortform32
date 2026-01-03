@@ -16,18 +16,18 @@
       const config = await response.json();
 
       // Check for MISSING_ENV error from server
-      if (config.error === 'MISSING_ENV') {
-        showSDKError('MISSING_ENV', config.message, config.instructions, config.missing);
+      if (config.ok === false || config.code === 'MISSING_ENV') {
+        showSDKError('MISSING_ENV', config.message, config.help, config.missing);
         return;
       }
 
-      if (!config.clientID) {
+      if (!config.clientId) {
         throw new Error('PayPal client ID not configured');
       }
 
       // Build PayPal SDK URL with fetched configuration
       // Enable all funding sources: card (guest checkout), Apple Pay, Google Pay
-      const sdkURL = `https://www.paypal.com/sdk/js?client-id=${config.clientID}&currency=${config.currency || 'USD'}&intent=capture&components=buttons`;
+      const sdkURL = `https://www.paypal.com/sdk/js?client-id=${config.clientId}&currency=${config.currency || 'USD'}&intent=capture&components=buttons&enable-funding=card`;
 
       // Create and append PayPal SDK script tag
       const script = document.createElement('script');

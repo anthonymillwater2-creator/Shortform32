@@ -22,18 +22,20 @@ export default async function handler(req, res) {
 
     if (missing.length > 0) {
       return res.status(500).json({
-        error: 'MISSING_ENV',
+        ok: false,
+        code: 'MISSING_ENV',
         message: 'PayPal environment variables not configured in Vercel',
         missing: missing,
-        instructions: 'Go to Vercel → Project Settings → Environment Variables and add: ' + missing.join(', ')
+        help: 'Set these in Vercel env vars for Preview: ' + missing.join(', ') + '. After updating env vars, redeploy Preview for changes to apply.'
       });
     }
 
     // Return public config only (never expose secret)
     return res.status(200).json({
-      clientID: PAYPAL_CLIENT_ID,
-      currency: PAYPAL_CURRENCY,
-      env: PAYPAL_ENV
+      ok: true,
+      env: PAYPAL_ENV,
+      clientId: PAYPAL_CLIENT_ID,
+      currency: PAYPAL_CURRENCY
     });
 
   } catch (error) {
