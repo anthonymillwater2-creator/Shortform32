@@ -21,7 +21,7 @@ a:hover{text-shadow:0 0 16px rgba(198,255,64,.6)}
 .header{position:sticky;top:0;z-index:999;background:rgba(0,0,0,.78);backdrop-filter:blur(8px);border-bottom:1px solid #121212}
 .header-content{display:flex;align-items:center;gap:18px;max-width:1200px;margin:0 auto;padding:12px 18px}
 .logo{display:flex;align-items:center;gap:10px}
-.logo-img{height:34px;width:34px;border-radius:8px;background:linear-gradient(135deg,var(--neon),#8cff00);color:#000;font-weight:800;display:grid;place-items:center;box-shadow:0 0 16px rgba(198,255,64,.5)}
+.logo-img{height:38px;width:auto;max-width:48px;border-radius:8px;object-fit:contain;box-shadow:0 0 16px rgba(198,255,64,.5)}
 .logo-text{font-weight:800;letter-spacing:.4px}
 .nav{margin-left:auto;display:flex;gap:18px}
 .nav-link{padding:8px 10px;border-radius:10px}

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QA Sandbox Testing - ShortFormFactory</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+.qa-container{max-width:900px;margin:40px auto;padding:20px;background:#0b0b0b;border:2px solid var(--neon);border-radius:16px}
+.qa-header{text-align:center;margin-bottom:30px}
+.qa-header h1{color:var(--neon);font-size:28px}
+.qa-section{background:#080808;padding:20px;border-radius:12px;margin-bottom:20px;border:1px solid #1b1b1b}
+.qa-section h2{font-size:18px;margin:0 0 15px;color:var(--neon)}
+.qa-status{font-family:monospace;font-size:13px;line-height:1.8;padding:15px;background:#000;border-radius:8px;margin:10px 0}
+.qa-status div{margin:5px 0}
+.qa-status strong{color:var(--neon);min-width:140px;display:inline-block}
+.qa-status code{background:#0e0e0e;padding:2px 6px;border-radius:4px;color:#fff}
+.status-indicator{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.status-indicator.pending{background:#666}
+.status-indicator.success{background:#00C851}
+.status-indicator.error{background:#ff4d4f}
+.qa-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:15px;margin:15px 0}
+.qa-btn{padding:12px 20px;border-radius:8px;border:0;font-weight:700;cursor:pointer;transition:.2s all;font-size:14px}
+.qa-btn-primary{background:var(--neon);color:#000}
+.qa-btn-primary:hover{transform:translateY(-2px);box-shadow:0 0 18px rgba(198,255,64,.5)}
+.qa-btn-secondary{background:#1b1b1b;color:#fff;border:1px solid #333}
+.qa-btn-danger{background:#ff4d4f;color:#fff}
+.qa-btn:disabled{opacity:.5;cursor:not-allowed}
+.qa-form-group{margin:12px 0}
+.qa-form-group label{display:block;margin-bottom:6px;font-weight:600;color:#9aa0a6}
+.qa-select{width:100%;padding:10px;background:#0e0e0e;border:1px solid #1b1b1b;border-radius:8px;color:#fff;font-size:14px}
+.qa-select:focus{outline:none;border-color:var(--neon)}
+#qaPayPalContainer{margin:15px 0;min-height:200px}
+.qa-log{max-height:200px;overflow-y:auto;font-size:12px;margin-top:10px}
+.qa-log-entry{padding:6px;margin:4px 0;border-radius:4px;background:#0e0e0e}
+.qa-log-entry.success{color:#00C851}
+.qa-log-entry.error{color:#ff4d4f}
+</style>
+</head>
+<body style="background:#000">
+  <div class="qa-container">
+    <div class="qa-header">
+      <h1>🧪 PayPal Sandbox QA Harness</h1>
+      <p style="color:#9aa0a6;margin:5px 0">Test PayPal integration in sandbox environment</p>
+      <p style="font-size:12px;color:#666">Hidden page for QA testing only</p>
+    </div>
+
+    <div class="qa-section">
+      <h2>1. Test Order Configuration</h2>
+      <div class="qa-form-group">
+        <label>Service</label>
+        <select id="qaService" class="qa-select">
+          <option value="">Select service...</option>
+          <option value="aiReel">AI Reel Edit</option>
+          <option value="socialEdit">Social Media Edit</option>
+          <option value="viralCaptions">Viral Captions</option>
+          <option value="podcastRepurpose">Podcast Repurpose</option>
+        </select>
+      </div>
+      <div class="qa-form-group">
+        <label>Package</label>
+        <select id="qaPackage" class="qa-select">
+          <option value="">Select package...</option>
+          <option value="basic">Basic</option>
+          <option value="standard">Standard</option>
+          <option value="premium">Premium</option>
+        </select>
+      </div>
+      <div class="qa-form-group">
+        <label>Add-ons</label>
+        <select id="qaAddons" class="qa-select" multiple size="3">
+          <option value="rush">Rush Delivery (+$25)</option>
+          <option value="extraClip">Extra Clip (+$15)</option>
+          <option value="colorGrade">Color Grading (+$20)</option>
+        </select>
+        <div style="font-size:11px;color:#666;margin-top:4px">Hold Ctrl/Cmd to select multiple</div>
+      </div>
+      <div class="qa-status">
+        <div><strong>Computed Total:</strong> <span id="qaTotal">$0.00</span></div>
+      </div>
+    </div>
+
+    <div class="qa-section">
+      <h2>2. Payment Flow Test</h2>
+      <div id="qaPayPalContainer"></div>
+      <div class="qa-grid">
+        <button class="qa-btn qa-btn-danger" id="qaReset">Reset Test State</button>
+      </div>
+    </div>
+
+    <div class="qa-section">
+      <h2>3. Payment Status</h2>
+      <div class="qa-status" id="qaStatusDisplay">
+        <div><span class="status-indicator pending"></span><strong>Order Created:</strong> <span id="qaOrderID">Pending</span></div>
+        <div><span class="status-indicator pending"></span><strong>Payment Approved:</strong> <span id="qaApproved">Pending</span></div>
+        <div><span class="status-indicator pending"></span><strong>Payment Captured:</strong> <span id="qaCaptured">Pending</span></div>
+        <div><span class="status-indicator pending"></span><strong>Capture ID:</strong> <span id="qaCaptureID">Pending</span></div>
+        <div><span class="status-indicator pending"></span><strong>Amount:</strong> <span id="qaAmount">Pending</span></div>
+        <div><span class="status-indicator pending"></span><strong>Intake Unlocked:</strong> <span id="qaIntakeStatus">No</span></div>
+      </div>
+    </div>
+
+    <div class="qa-section">
+      <h2>4. Event Log</h2>
+      <div id="qaLog" class="qa-log"></div>
+    </div>
+
+    <div style="text-align:center;margin-top:30px;padding:20px;border-top:1px solid #1b1b1b">
+      <a href="/order.html" style="color:var(--neon);text-decoration:none">← Back to Production Order Page</a>
+    </div>
+  </div>
+
+  <script src="/paypal-loader.js"></script>
+  <script>
+(function() {
+  'use strict';
+
+  const SERVICE_PRICES={aiReel:{basic:25,standard:60,premium:140},socialEdit:{basic:30,standard:70,premium:160},viralCaptions:{basic:20,standard:50,premium:110},podcastRepurpose:{basic:40,standard:95,premium:220}};
+  const ADDON_PRICES={rush:25,extraClip:15,colorGrade:20};
+
+  let qaState={orderID:null,captureID:null,approved:false,captured:false};
+
+  function log(message,type='info'){
+    const logEl=document.getElementById('qaLog');
+    const entry=document.createElement('div');
+    entry.className='qa-log-entry '+(type==='success'?'success':type==='error'?'error':'');
+    entry.textContent=`[${new Date().toLocaleTimeString()}] ${message}`;
+    logEl.appendChild(entry);
+    logEl.scrollTop=logEl.scrollHeight;
+  }
+
+  function updateTotal(){
+    const service=document.getElementById('qaService').value;
+    const pkg=document.getElementById('qaPackage').value;
+    const addons=Array.from(document.getElementById('qaAddons').selectedOptions).map(o=>o.value);
+
+    let total=0;
+    if(service&&pkg&&SERVICE_PRICES[service]){
+      total=SERVICE_PRICES[service][pkg]||0;
+    }
+    addons.forEach(a=>{
+      total+=ADDON_PRICES[a]||0;
+    });
+
+    document.getElementById('qaTotal').textContent='$'+total.toFixed(2);
+    return total;
+  }
+
+  function updateStatus(field,value,success=false){
+    const el=document.getElementById(field);
+    const indicator=el.parentElement.querySelector('.status-indicator');
+    el.textContent=value;
+    if(success){
+      indicator.className='status-indicator success';
+      el.style.color='#00C851';
+    }
+  }
+
+  function initQAPayPal(){
+    if(typeof paypal==='undefined'){
+      setTimeout(initQAPayPal,500);
+      return;
+    }
+
+    paypal.Buttons({
+      createOrder:async function(){
+        const service=document.getElementById('qaService').value;
+        const pkg=document.getElementById('qaPackage').value;
+        const addons=Array.from(document.getElementById('qaAddons').selectedOptions).map(o=>o.value);
+
+        if(!service||!pkg){
+          alert('Please select service and package');
+          throw new Error('Missing selection');
+        }
+
+        log('Creating order...','info');
+        const response=await fetch('/api/create-order',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({service,package:pkg,addons})
+        });
+
+        const data=await response.json();
+        if(!data.orderID){
+          log('Order creation failed','error');
+          throw new Error('No orderID');
+        }
+
+        qaState.orderID=data.orderID;
+        updateStatus('qaOrderID',data.orderID,true);
+        log('Order created: '+data.orderID,'success');
+        return data.orderID;
+      },
+      onApprove:async function(data){
+        updateStatus('qaApproved','Yes',true);
+        log('Payment approved by user','success');
+
+        log('Capturing payment...','info');
+        const response=await fetch('/api/capture-order',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({orderID:data.orderID})
+        });
+
+        const captureData=await response.json();
+
+        if(captureData.success&&captureData.status==='COMPLETED'){
+          qaState.captured=true;
+          qaState.captureID=captureData.captureID;
+
+          updateStatus('qaCaptured','Completed',true);
+          updateStatus('qaCaptureID',captureData.captureID,true);
+          updateStatus('qaAmount',`${captureData.amount.currency_code} ${captureData.amount.value}`,true);
+          updateStatus('qaIntakeStatus','Yes',true);
+
+          log('Payment captured successfully!','success');
+          log('Capture ID: '+captureData.captureID,'success');
+        }else{
+          log('Capture failed: '+JSON.stringify(captureData),'error');
+        }
+      },
+      onCancel:function(){
+        log('Payment cancelled by user','error');
+      },
+      onError:function(err){
+        log('PayPal error: '+err.toString(),'error');
+      },
+      style:{layout:'vertical',color:'gold',shape:'rect'}
+    }).render('#qaPayPalContainer');
+
+    log('PayPal buttons rendered','success');
+  }
+
+  document.getElementById('qaService').addEventListener('change',updateTotal);
+  document.getElementById('qaPackage').addEventListener('change',updateTotal);
+  document.getElementById('qaAddons').addEventListener('change',updateTotal);
+
+  document.getElementById('qaReset').addEventListener('click',function(){
+    if(confirm('Reset all test state?')){
+      location.reload();
+    }
+  });
+
+  // Initialize
+  setTimeout(function(){
+    log('QA Harness initialized','success');
+    initQAPayPal();
+  },1000);
+
+})();
+  </script>
+</body>
+</html>
