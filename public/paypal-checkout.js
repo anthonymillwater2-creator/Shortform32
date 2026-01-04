@@ -1,28 +1,235 @@
-// PayPal Checkout - Render PayPal Buttons
-// Called by main.js after PAY TAP FIRED
+// PayPal Checkout - Complete Intake Auto-Unlock System
 (function() {
   'use strict';
+
+  // ====== CONSTANTS ======
+  const RECEIPT_KEY = "sff_paid_receipt_v1";
+  let UNLOCKED = false;
+  let CAPTURE_IN_FLIGHT = false;
 
   // dbg is provided by main.js
   const dbg = window.dbg || function(m){ console.log('[PAYPAL]', m); };
 
-  // ====== PAYMENT STATE MANAGEMENT ======
-  const PaymentState = {
-    get: () => sessionStorage.getItem('sff_payment_confirmed') === 'true',
-    set: (value) => sessionStorage.setItem('sff_payment_confirmed', value ? 'true' : 'false'),
-    getOrderID: () => sessionStorage.getItem('sff_order_id'),
-    setOrderID: (id) => sessionStorage.setItem('sff_order_id', id),
-    getCaptureID: () => sessionStorage.getItem('sff_capture_id'),
-    setCaptureID: (id) => sessionStorage.setItem('sff_capture_id', id),
-    getAmount: () => sessionStorage.getItem('sff_amount'),
-    setAmount: (amount) => sessionStorage.setItem('sff_amount', amount),
-    clear: () => {
-      sessionStorage.removeItem('sff_payment_confirmed');
-      sessionStorage.removeItem('sff_order_id');
-      sessionStorage.removeItem('sff_capture_id');
-      sessionStorage.removeItem('sff_amount');
+  // ====== DOM REFERENCES ======
+  let paymentSection, receiptSection, intakeSection, intakeForm, payError;
+
+  // ====== HELPER: Extract capture fields from PayPal API response ======
+  function extractCaptureFields(cap) {
+    try {
+      const purchase = cap.purchase_units?.[0] || {};
+      const capture = purchase.payments?.captures?.[0] || {};
+
+      return {
+        captureID: capture.id || "",
+        amount: capture.amount?.value || "",
+        currency: capture.amount?.currency_code || "",
+        payerEmail: cap.payer?.email_address || ""
+      };
+    } catch(e) {
+      dbg("extractCaptureFields error: " + e.message);
+      return { captureID: "", amount: "", currency: "", payerEmail: "" };
     }
-  };
+  }
+
+  // ====== LOCK INTAKE ======
+  function lockIntake(reason) {
+    if (!intakeSection) return;
+
+    intakeSection.hidden = true;
+    intakeSection.classList.add("locked");
+    intakeSection.setAttribute("aria-disabled", "true");
+
+    // Disable all inputs
+    if (intakeForm) {
+      intakeForm.querySelectorAll("input,select,textarea,button").forEach(el => {
+        el.disabled = true;
+      });
+    }
+
+    // Show payment section
+    if (paymentSection) paymentSection.style.display = "";
+
+    // Show error if provided
+    if (reason && payError) {
+      payError.textContent = reason;
+      payError.style.display = "block";
+    }
+
+    dbg("lockIntake: " + (reason || "intake locked"));
+  }
+
+  // ====== UNLOCK INTAKE AND AUTO-OPEN ======
+  function unlockIntakeAndOpen(receipt) {
+    if (UNLOCKED) {
+      dbg("unlockIntakeAndOpen: already unlocked, skipping");
+      return;
+    }
+
+    UNLOCKED = true;
+
+    // Store receipt in localStorage
+    try {
+      localStorage.setItem(RECEIPT_KEY, JSON.stringify(receipt));
+      dbg("Receipt stored in localStorage");
+    } catch(e) {
+      dbg("localStorage write failed: " + e.message);
+    }
+
+    // Render receipt
+    if (receiptSection) {
+      receiptSection.innerHTML = `
+        <div style="background:#0a0a0a;border:2px solid #C6FF40;border-radius:8px;padding:16px;margin:16px 0;">
+          <div style="color:#C6FF40;font-weight:bold;font-size:16px;margin-bottom:12px;">✓ Payment Confirmed</div>
+          <div style="font-size:13px;color:#9aa0a6;line-height:1.6;">
+            <div><strong style="color:#fff;">Amount:</strong> ${receipt.currency || 'USD'} ${receipt.amount || '0.00'}</div>
+            <div style="margin-top:4px;"><strong style="color:#fff;">Order ID:</strong><br/><code style="font-size:11px;background:#1a1a1a;padding:2px 6px;border-radius:4px;color:#C6FF40;">${receipt.orderID || 'N/A'}</code></div>
+            <div style="margin-top:4px;"><strong style="color:#fff;">Capture ID:</strong><br/><code style="font-size:11px;background:#1a1a1a;padding:2px 6px;border-radius:4px;color:#C6FF40;">${receipt.captureID || 'N/A'}</code></div>
+            ${receipt.payerEmail ? `<div style="margin-top:4px;"><strong style="color:#fff;">Email:</strong> ${receipt.payerEmail}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    // Hide payment section
+    if (paymentSection) paymentSection.style.display = "none";
+
+    // Unhide and unlock intake
+    if (intakeSection) {
+      intakeSection.hidden = false;
+      intakeSection.classList.remove("locked");
+      intakeSection.removeAttribute("aria-disabled");
+    }
+
+    // Enable all inputs
+    if (intakeForm) {
+      intakeForm.querySelectorAll("input,select,textarea,button").forEach(el => {
+        el.disabled = false;
+      });
+    }
+
+    dbg("✓ Intake unlocked");
+
+    // AUTO-SCROLL + AUTO-FOCUS (after layout settles)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (intakeSection) {
+          intakeSection.scrollIntoView({ behavior: "smooth", block: "start" });
+
+          const first = document.getElementById("intake-first") ||
+                       intakeForm?.querySelector("[required]") ||
+                       intakeForm?.querySelector("input,select,textarea");
+
+          if (first) {
+            setTimeout(() => first.focus({ preventScroll: true }), 300);
+          }
+
+          dbg("✓ Auto-scrolled and focused");
+        }
+      });
+    });
+  }
+
+  // ====== RESTORE PAID STATE ON LOAD ======
+  function restorePaidStateOnLoad() {
+    try {
+      const stored = localStorage.getItem(RECEIPT_KEY);
+      if (!stored) return;
+
+      const receipt = JSON.parse(stored);
+      if (receipt.paid && receipt.captureID && receipt.orderID) {
+        dbg("Restoring paid state from localStorage");
+        unlockIntakeAndOpen(receipt);
+      }
+    } catch(e) {
+      dbg("restorePaidStateOnLoad error: " + e.message);
+    }
+  }
+
+  // ====== CAPTURE ORDER (SERVER CALL) ======
+  async function captureOrder(orderID) {
+    if (CAPTURE_IN_FLIGHT) {
+      throw new Error("Capture already in progress");
+    }
+
+    CAPTURE_IN_FLIGHT = true;
+    dbg("captureOrder start: " + orderID);
+
+    try {
+      const response = await fetch("/api/capture-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderID })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `Capture failed: ${response.status}`);
+      }
+
+      dbg("✓ Capture successful");
+      return data;
+
+    } finally {
+      CAPTURE_IN_FLIGHT = false;
+    }
+  }
+
+  // ====== HANDLE PAYPAL REDIRECT RETURN ======
+  async function handlePayPalReturn() {
+    const params = new URLSearchParams(location.search);
+    const token = params.get("token"); // PayPal orderID on return
+
+    if (!token) return;
+
+    // Check if we already have a receipt
+    try {
+      const stored = localStorage.getItem(RECEIPT_KEY);
+      if (stored) {
+        const receipt = JSON.parse(stored);
+        if (receipt.paid && receipt.orderID === token) {
+          dbg("Return: receipt already exists for this order");
+          // Clean URL and return
+          history.replaceState({}, "", location.pathname);
+          return;
+        }
+      }
+    } catch(e) {
+      dbg("Return: localStorage check error: " + e.message);
+    }
+
+    // Capture the order
+    dbg("Return mode: capturing orderID " + token);
+
+    try {
+      const cap = await captureOrder(token);
+      const fields = extractCaptureFields(cap);
+
+      const receipt = {
+        paid: true,
+        ts: new Date().toISOString(),
+        orderID: token,
+        ...fields,
+        service: window.ORDER_STATE?.service || "",
+        package: window.ORDER_STATE?.pack || "",
+        addons: window.ORDER_STATE?.addons || []
+      };
+
+      unlockIntakeAndOpen(receipt);
+
+      // Clean URL
+      history.replaceState({}, "", location.pathname);
+
+    } catch(error) {
+      dbg("Return capture error: " + error.message);
+      lockIntake("Payment return failed: " + error.message);
+
+      if (payError) {
+        payError.textContent = "Payment verification failed. Please contact support with Order ID: " + token;
+        payError.style.display = "block";
+      }
+    }
+  }
 
   // ====== GET ORDER DATA ======
   function getOrderData() {
@@ -37,6 +244,13 @@
     const service = serviceSelect.value;
     const packageType = selectedPackageRadio.value;
     const addons = Array.from(addonCheckboxes).map(cb => cb.value);
+
+    // Store in global for receipt generation
+    window.ORDER_STATE = {
+      service,
+      pack: packageType,
+      addons
+    };
 
     return { service, package: packageType, addons };
   }
@@ -106,34 +320,36 @@
       onApprove: async function(data) {
         dbg(`onApprove - orderID=${data.orderID}`);
 
-        const response = await fetch("/api/capture-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderID: data.orderID })
-        });
+        try {
+          const cap = await captureOrder(data.orderID);
+          const fields = extractCaptureFields(cap);
 
-        const captureData = await response.json();
-        dbg(`capture-order response: ok=${response.ok}, status=${captureData.status}`);
+          const receipt = {
+            paid: true,
+            ts: new Date().toISOString(),
+            orderID: data.orderID,
+            ...fields,
+            service: window.ORDER_STATE?.service || "",
+            package: window.ORDER_STATE?.pack || "",
+            addons: window.ORDER_STATE?.addons || []
+          };
 
-        if (captureData.success && captureData.status === "COMPLETED") {
-          // Store payment
-          PaymentState.set(true);
-          PaymentState.setOrderID(captureData.orderID);
-          PaymentState.setCaptureID(captureData.captureID);
-          PaymentState.setAmount(JSON.stringify(captureData.amount));
+          unlockIntakeAndOpen(receipt);
 
-          dbg(`✓ Payment captured: ${captureData.captureID}`);
+        } catch(error) {
+          dbg("onApprove capture error: " + error.message);
+          lockIntake("Payment capture failed: " + error.message);
 
-          unlockIntake();
-          showPaymentConfirmation(captureData);
-        } else {
-          throw new Error("Payment capture failed");
+          if (payError) {
+            payError.textContent = "Payment verification failed. Please contact support.";
+            payError.style.display = "block";
+          }
         }
       },
 
       onCancel: function(data) {
         dbg(`onCancel - orderID=${data.orderID || 'none'}`);
-        showError("Payment was cancelled");
+        lockIntake("Payment was cancelled");
 
         if (payBtn) {
           payBtn.disabled = false;
@@ -142,7 +358,12 @@
 
       onError: function(err) {
         dbg(`onError: ${String(err)}`);
-        showError("An error occurred during payment");
+        lockIntake("PayPal error: " + String(err));
+
+        if (payError) {
+          payError.textContent = "An error occurred during payment. Please try again.";
+          payError.style.display = "block";
+        }
 
         if (payBtn) {
           payBtn.disabled = false;
@@ -171,73 +392,13 @@
   // Expose globally for main.js to call
   window.renderPayPalButtons = renderPayPalButtons;
 
-  // ====== PAYMENT STATUS CHECK ======
-  function checkPaymentStatus() {
-    if (PaymentState.get()) {
-      dbg("Payment already completed - showing receipt");
-
-      const captureData = {
-        orderID: PaymentState.getOrderID(),
-        captureID: PaymentState.getCaptureID(),
-        amount: PaymentState.getAmount() ? JSON.parse(PaymentState.getAmount()) : null
-      };
-
-      unlockIntake();
-      showPaymentConfirmation(captureData);
-    }
-  }
-
-  // ====== UNLOCK INTAKE ======
-  function unlockIntake() {
-    const submitButton = document.getElementById("submitIntakeButton");
-    const intakeNotice = document.getElementById("intakeNotice");
-
-    if (submitButton) {
-      submitButton.disabled = false;
-      submitButton.classList.add("unlocked");
-    }
-
-    if (intakeNotice) {
-      intakeNotice.innerHTML = '<span class="check-icon">✓</span> Payment confirmed! Ready to submit project details';
-      intakeNotice.classList.add("success");
-      intakeNotice.style.display = "block";
-      intakeNotice.style.color = "#00C851";
-    }
-  }
-
-  // ====== SHOW PAYMENT CONFIRMATION ======
-  function showPaymentConfirmation(captureData) {
-    const payBtn = document.getElementById("payButton");
-    const container = document.getElementById("paypal-button-container");
-
-    if (container) {
-      container.style.display = "none";
-    }
-
-    if (payBtn && captureData) {
-      const amount = captureData.amount ? `${captureData.amount.currency_code} ${captureData.amount.value}` : "N/A";
-
-      payBtn.innerHTML = `
-        <div style="text-align: left; font-size: 13px; line-height: 1.6;">
-          <div style="font-weight: 800; color: #00C851; margin-bottom: 8px;">✓ Payment Completed</div>
-          <div style="font-weight: 400; font-size: 12px; color: #9aa0a6;">
-            <div><strong>Amount:</strong> ${amount}</div>
-            <div style="margin-top: 4px;"><strong>Order ID:</strong><br/><code style="font-size: 11px; background: #0e0e0e; padding: 2px 4px; border-radius: 4px;">${captureData.orderID || "N/A"}</code></div>
-            <div style="margin-top: 4px;"><strong>Capture ID:</strong><br/><code style="font-size: 11px; background: #0e0e0e; padding: 2px 4px; border-radius: 4px;">${captureData.captureID || "N/A"}</code></div>
-          </div>
-          <div style="margin-top: 8px; font-size: 11px; color: #666;">Screenshot this receipt for your records</div>
-        </div>
-      `;
-      payBtn.disabled = true;
-      payBtn.classList.add("completed");
-      payBtn.style.display = "block";
-      payBtn.style.height = "auto";
-      payBtn.style.padding = "16px";
-    }
-  }
-
   // ====== SHOW ERROR ======
   function showError(message) {
+    if (payError) {
+      payError.textContent = message;
+      payError.style.display = "block";
+    }
+
     const errorDiv = document.createElement("div");
     errorDiv.className = "payment-notification error";
     errorDiv.textContent = message;
@@ -264,35 +425,30 @@
     }, 5000);
   }
 
-  // ====== INTAKE BUTTON ======
-  function setupIntakeButton() {
-    const submitButton = document.getElementById("submitIntakeButton");
-    if (!submitButton) return;
-
-    submitButton.addEventListener("click", handleIntakeSubmit);
-  }
-
+  // ====== INTAKE FORM SUBMIT ======
   function handleIntakeSubmit(e) {
     e.preventDefault();
 
-    if (!PaymentState.get()) {
-      showError("Please complete payment first");
+    const formData = new FormData(intakeForm);
+    const email = formData.get("email");
+    const footage = formData.get("footage");
+    const notes = formData.get("notes") || "None provided";
+
+    if (!email || !footage) {
+      showError("Please fill in all required fields");
       return;
     }
 
-    const orderData = getOrderData();
-    if (!orderData) {
-      showError("Please select a service and package");
-      return;
-    }
+    // Get receipt data
+    let receipt = {};
+    try {
+      const stored = localStorage.getItem(RECEIPT_KEY);
+      if (stored) receipt = JSON.parse(stored);
+    } catch(e) {}
 
-    const projectNotes = document.getElementById("projectNotes")?.value || "None provided";
     const totalAmount = document.getElementById("totalAmount")?.textContent || "$0.00";
-    const orderID = PaymentState.getOrderID() || "N/A";
-    const captureID = PaymentState.getCaptureID() || "N/A";
-
-    const serviceName = document.getElementById("summaryService")?.textContent || orderData.service;
-    const packageName = document.getElementById("summaryPackage")?.textContent || orderData.package;
+    const serviceName = document.getElementById("summaryService")?.textContent || receipt.service || "N/A";
+    const packageName = document.getElementById("summaryPackage")?.textContent || receipt.package || "N/A";
     const addonsText = document.getElementById("summaryAddons")?.textContent || "None";
 
     const emailBody = `
@@ -301,14 +457,16 @@ New Order Intake – ${serviceName}
 Package: ${packageName}
 Add-ons: ${addonsText}
 Total Paid: ${totalAmount}
-PayPal Order ID: ${orderID}
-PayPal Capture ID: ${captureID}
+PayPal Order ID: ${receipt.orderID || 'N/A'}
+PayPal Capture ID: ${receipt.captureID || 'N/A'}
 
-Initial Notes:
-${projectNotes}
+Email: ${email}
 
-Footage Links (Drive/Dropbox/etc.):
-(Please provide your footage links below)
+Footage Links:
+${footage}
+
+Additional Notes:
+${notes}
 
 Social handles for tagging (optional):
 TikTok: @short.formfactory
@@ -322,11 +480,59 @@ Sent from ShortFormFactory order page
     window.location.href = mailto;
   }
 
-  // Initialize on load
+  // ====== INITIALIZATION ======
   document.addEventListener('DOMContentLoaded', () => {
-    checkPaymentStatus();
-    setupIntakeButton();
-    dbg("paypal-checkout.js loaded");
+    dbg("paypal-checkout.js DOMContentLoaded");
+
+    // Get DOM references
+    paymentSection = document.getElementById("payment-section");
+    receiptSection = document.getElementById("receipt-section");
+    intakeSection = document.getElementById("intake-section");
+    intakeForm = document.getElementById("intake-form");
+    payError = document.getElementById("pay-error");
+
+    // Wire global error handlers
+    window.addEventListener("error", (e) => {
+      if (payError) {
+        payError.textContent = "JS ERROR: " + e.message;
+        payError.style.display = "block";
+      }
+    });
+
+    window.addEventListener("unhandledrejection", (e) => {
+      if (payError) {
+        payError.textContent = "PROMISE ERROR: " + String(e.reason);
+        payError.style.display = "block";
+      }
+    });
+
+    // Wire intake form submit
+    if (intakeForm) {
+      intakeForm.addEventListener("submit", handleIntakeSubmit);
+    }
+
+    // INITIALIZATION ORDER (per spec):
+    // 1) restorePaidStateOnLoad
+    // 2) handlePayPalReturn
+    // 3) if not unlocked, lockIntake
+
+    restorePaidStateOnLoad();
+
+    // Give restore a moment to complete before checking return
+    setTimeout(() => {
+      if (!UNLOCKED) {
+        handlePayPalReturn();
+      }
+
+      // If still not unlocked after both checks, ensure intake is locked
+      setTimeout(() => {
+        if (!UNLOCKED) {
+          lockIntake("");
+        }
+      }, 100);
+    }, 100);
+
+    dbg("✓ Initialization complete");
   });
 
 })();

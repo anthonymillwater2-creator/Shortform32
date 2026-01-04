@@ -21,6 +21,15 @@
   #paypal-button-container > * {
     pointer-events: auto !important;
   }
+
+  /* Intake lock/unlock states */
+  .locked {
+    pointer-events: none !important;
+    opacity: 0.25 !important;
+  }
+  #intake-section[hidden] {
+    display: none !important;
+  }
 </style>
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -210,25 +219,58 @@
                 <span class="total-value" id="totalAmount">$0</span>
               </div>
 
-              <button class="btn btn-primary btn-full" id="payButton" type="button" disabled>
-                Proceed to PayPal Payment
-              </button>
-
-              <!-- Debug panel - must show state changes and tap events -->
-              <pre id="pp-debug" style="white-space:pre-wrap;color:#C6FF40;font-size:12px;line-height:1.25;margin-top:10px;max-height:180px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:4px;"></pre>
-
-              <!-- PayPal Button Container -->
-              <div id="paypal-button-container" style="margin-top: 12px; display:none;"></div>
-
-              <div class="intake-section" id="intakeSection">
-                <button class="btn btn-secondary btn-full" id="submitIntakeButton" disabled>
-                  <span class="btn-icon">📧</span>
-                  Submit Project Details
+              <!-- Payment Section -->
+              <div id="payment-section">
+                <button class="btn btn-primary btn-full" id="payButton" type="button" disabled>
+                  Proceed to PayPal Payment
                 </button>
-                <p class="intake-notice" id="intakeNotice">
-                  <span class="lock-icon">🔒</span>
-                  Complete payment to unlock project submission
-                </p>
+
+                <!-- PayPal Button Container -->
+                <div id="paypal-button-container" style="margin-top: 12px; display:none;"></div>
+
+                <!-- Payment Error Display -->
+                <div id="pay-error" style="display:none;margin-top:10px;color:#ff4d4f;font-size:13px;"></div>
+
+                <!-- Debug panel -->
+                <pre id="pp-debug" style="white-space:pre-wrap;color:#C6FF40;font-size:12px;line-height:1.25;margin-top:10px;max-height:180px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:4px;"></pre>
+              </div>
+
+              <!-- Receipt Section (renders after payment) -->
+              <div id="receipt-section"></div>
+
+              <!-- Intake Section (locked until payment) -->
+              <div id="intake-section" class="locked" aria-disabled="true" hidden>
+                <form id="intake-form">
+                  <div style="margin-top:20px;margin-bottom:16px;">
+                    <h3 style="color:#C6FF40;margin-bottom:8px;">📧 Submit Project Details</h3>
+                    <p style="font-size:13px;color:#9aa0a6;">Payment confirmed! Now provide your project details so we can begin.</p>
+                  </div>
+
+                  <div style="margin-bottom:12px;">
+                    <label for="intake-first" style="display:block;margin-bottom:4px;font-size:13px;color:#fff;">Email Address *</label>
+                    <input type="email" id="intake-first" name="email" required
+                           style="width:100%;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:14px;"
+                           placeholder="your@email.com">
+                  </div>
+
+                  <div style="margin-bottom:12px;">
+                    <label for="intake-footage" style="display:block;margin-bottom:4px;font-size:13px;color:#fff;">Footage Links (Drive/Dropbox/etc.) *</label>
+                    <textarea id="intake-footage" name="footage" required rows="3"
+                              style="width:100%;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:14px;resize:vertical;"
+                              placeholder="Paste your Google Drive, Dropbox, or WeTransfer links here..."></textarea>
+                  </div>
+
+                  <div style="margin-bottom:16px;">
+                    <label for="intake-notes" style="display:block;margin-bottom:4px;font-size:13px;color:#fff;">Additional Notes (Optional)</label>
+                    <textarea id="intake-notes" name="notes" rows="4"
+                              style="width:100%;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:14px;resize:vertical;"
+                              placeholder="Style preferences, timing cues, special requests..."></textarea>
+                  </div>
+
+                  <button type="submit" id="submitIntakeButton" class="btn btn-primary btn-full" disabled>
+                    Send Project Details to ShortFormFactory
+                  </button>
+                </form>
               </div>
             </div>
 
