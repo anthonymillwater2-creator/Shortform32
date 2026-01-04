@@ -210,18 +210,15 @@
                 <span class="total-value" id="totalAmount">$0</span>
               </div>
 
-              <button class="btn btn-primary btn-full" id="proceed-paypal" type="button" disabled>
+              <button class="btn btn-primary btn-full" id="payButton" type="button" disabled>
                 Proceed to PayPal Payment
               </button>
 
-              <!-- Debug Toast - MUST show CLICK FIRED on tap -->
-              <div id="pp-toast" style="margin-top:10px;color:#C6FF40;font-size:14px;font-weight:bold;"></div>
-
-              <!-- Debug Log - MUST show handler wiring and execution flow -->
+              <!-- Debug panel - must show state changes and tap events -->
               <pre id="pp-debug" style="white-space:pre-wrap;color:#C6FF40;font-size:12px;line-height:1.25;margin-top:10px;max-height:180px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:4px;"></pre>
 
               <!-- PayPal Button Container -->
-              <div id="paypal-button-container" style="margin-top: 12px;"></div>
+              <div id="paypal-button-container" style="margin-top: 12px; display:none;"></div>
 
               <div class="intake-section" id="intakeSection">
                 <button class="btn btn-secondary btn-full" id="submitIntakeButton" disabled>

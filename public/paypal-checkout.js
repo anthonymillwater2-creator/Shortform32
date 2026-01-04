@@ -1,34 +1,10 @@
-// PayPal Checkout - iOS Safari Click Handler Fix
-// GOAL: Prove click events fire, then mount PayPal buttons
+// PayPal Checkout - Render PayPal Buttons
+// Called by main.js after PAY TAP FIRED
 (function() {
   'use strict';
 
-  // ====== HELPER FUNCTIONS - VISIBLE DEBUG ======
-  function toast(msg) {
-    const t = document.getElementById("pp-toast");
-    if (t) {
-      t.textContent = msg + " @ " + new Date().toLocaleTimeString();
-    }
-    console.log("[TOAST]", msg);
-  }
-
-  function dbg(msg) {
-    const el = document.getElementById("pp-debug");
-    if (el) {
-      const timestamp = new Date().toLocaleTimeString();
-      el.textContent = `[${timestamp}] ${msg}\n` + (el.textContent || "");
-    }
-    console.log("[DEBUG]", msg);
-  }
-
-  // ====== GLOBAL ERROR HANDLERS ======
-  window.addEventListener("error", (e) => {
-    dbg(`JS ERROR: ${e.message} at ${e.filename}:${e.lineno}`);
-  });
-
-  window.addEventListener("unhandledrejection", (e) => {
-    dbg(`PROMISE ERROR: ${String(e.reason)}`);
-  });
+  // dbg is provided by main.js
+  const dbg = window.dbg || function(m){ console.log('[PAYPAL]', m); };
 
   // ====== PAYMENT STATE MANAGEMENT ======
   const PaymentState = {
@@ -65,112 +41,12 @@
     return { service, package: packageType, addons };
   }
 
-  // ====== DOM READY ======
-  document.addEventListener("DOMContentLoaded", () => {
-    dbg("DOMContentLoaded fired");
-
-    const btn = document.getElementById("proceed-paypal");
-    if (!btn) {
-      dbg("FATAL: proceed-paypal button missing");
-      toast("ERROR: Button not found");
-      return;
-    }
-
-    dbg("proceed-paypal button found - wiring handlers");
-
-    // Wire both pointerup AND click for iOS Safari
-    btn.addEventListener("pointerup", async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      toast("CLICK FIRED (pointerup)");
-      dbg("CLICK FIRED (pointerup)");
-      await proceedPayPal();
-    }, { passive: false });
-
-    btn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      toast("CLICK FIRED (click)");
-      dbg("CLICK FIRED (click)");
-      await proceedPayPal();
-    }, { passive: false });
-
-    dbg("✓ Handlers attached to proceed-paypal button");
-
-    // Check if payment already completed
-    checkPaymentStatus();
-    setupIntakeButton();
-  });
-
-  // ====== PROCEED TO PAYPAL ======
-  async function proceedPayPal() {
-    dbg("proceedPayPal() called");
-
-    // Get current selections
-    const orderData = getOrderData();
-    const totalEl = document.getElementById('totalAmount');
-    const total = totalEl ? parseFloat(totalEl.textContent.replace(/[^0-9.]/g, '')) : 0;
-
-    dbg(`Selected: service=${orderData?.service || 'NONE'}, package=${orderData?.package || 'NONE'}, total=$${total}`);
-
-    // Validate
-    if (!orderData || !orderData.service || !orderData.package) {
-      toast("ERROR: Select service + package first");
-      dbg("Validation failed: missing service or package");
-      showError("Please select a service and package first");
-      return;
-    }
-
-    if (total <= 0) {
-      toast("ERROR: Total must be > $0");
-      dbg("Validation failed: total is $0");
-      showError("Total amount must be greater than $0");
-      return;
-    }
-
-    dbg("✓ Validation passed");
-
-    // Check container exists
-    const container = document.getElementById("paypal-button-container");
-    if (!container) {
-      dbg("FATAL: paypal-button-container missing");
-      toast("ERROR: Container missing");
-      return;
-    }
-
-    dbg("✓ PayPal container found");
-
-    // Disable button
-    const btn = document.getElementById("proceed-paypal");
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = "Loading PayPal...";
-    }
-
-    // Mount PayPal Buttons
-    try {
-      await mountPayPalButtons();
-      toast("✓ PayPal Buttons Ready");
-      dbg("✓ mountPayPalButtons succeeded");
-    } catch (error) {
-      toast("ERROR: " + error.message);
-      dbg("mountPayPalButtons error: " + error.message);
-      showError("Failed to load PayPal: " + error.message);
-
-      // Re-enable button
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "Retry PayPal Payment";
-      }
-    }
-  }
-
-  // ====== MOUNT PAYPAL BUTTONS ======
-  async function mountPayPalButtons() {
-    dbg("mountPayPalButtons start");
+  // ====== RENDER PAYPAL BUTTONS ======
+  async function renderPayPalButtons() {
+    dbg("renderPayPalButtons start");
 
     const container = document.getElementById("paypal-button-container");
-    const btn = document.getElementById("proceed-paypal");
+    const payBtn = document.getElementById("payButton");
 
     if (!container) {
       throw new Error("PayPal container not found");
@@ -247,7 +123,6 @@
           PaymentState.setAmount(JSON.stringify(captureData.amount));
 
           dbg(`✓ Payment captured: ${captureData.captureID}`);
-          toast("✓ Payment Complete");
 
           unlockIntake();
           showPaymentConfirmation(captureData);
@@ -258,23 +133,19 @@
 
       onCancel: function(data) {
         dbg(`onCancel - orderID=${data.orderID || 'none'}`);
-        toast("Payment cancelled");
         showError("Payment was cancelled");
 
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = "Proceed to PayPal Payment";
+        if (payBtn) {
+          payBtn.disabled = false;
         }
       },
 
       onError: function(err) {
         dbg(`onError: ${String(err)}`);
-        toast("PayPal error");
         showError("An error occurred during payment");
 
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = "Retry PayPal Payment";
+        if (payBtn) {
+          payBtn.disabled = false;
         }
       },
 
@@ -289,13 +160,16 @@
     dbg("✓ Buttons rendered successfully");
 
     // Hide proceed button, show PayPal buttons
-    if (btn) {
-      btn.style.display = "none";
+    if (payBtn) {
+      payBtn.style.display = "none";
     }
 
     // Scroll to PayPal
     container.scrollIntoView({ behavior: "smooth", block: "center" });
   }
+
+  // Expose globally for main.js to call
+  window.renderPayPalButtons = renderPayPalButtons;
 
   // ====== PAYMENT STATUS CHECK ======
   function checkPaymentStatus() {
@@ -333,17 +207,17 @@
 
   // ====== SHOW PAYMENT CONFIRMATION ======
   function showPaymentConfirmation(captureData) {
-    const btn = document.getElementById("proceed-paypal");
+    const payBtn = document.getElementById("payButton");
     const container = document.getElementById("paypal-button-container");
 
     if (container) {
       container.style.display = "none";
     }
 
-    if (btn && captureData) {
+    if (payBtn && captureData) {
       const amount = captureData.amount ? `${captureData.amount.currency_code} ${captureData.amount.value}` : "N/A";
 
-      btn.innerHTML = `
+      payBtn.innerHTML = `
         <div style="text-align: left; font-size: 13px; line-height: 1.6;">
           <div style="font-weight: 800; color: #00C851; margin-bottom: 8px;">✓ Payment Completed</div>
           <div style="font-weight: 400; font-size: 12px; color: #9aa0a6;">
@@ -354,11 +228,11 @@
           <div style="margin-top: 8px; font-size: 11px; color: #666;">Screenshot this receipt for your records</div>
         </div>
       `;
-      btn.disabled = true;
-      btn.classList.add("completed");
-      btn.style.display = "block";
-      btn.style.height = "auto";
-      btn.style.padding = "16px";
+      payBtn.disabled = true;
+      payBtn.classList.add("completed");
+      payBtn.style.display = "block";
+      payBtn.style.height = "auto";
+      payBtn.style.padding = "16px";
     }
   }
 
@@ -447,5 +321,12 @@ Sent from ShortFormFactory order page
     const mailto = `mailto:shortformfactory.help@gmail.com?subject=${encodeURIComponent("New Order Intake – " + serviceName)}&body=${encodeURIComponent(emailBody)}`;
     window.location.href = mailto;
   }
+
+  // Initialize on load
+  document.addEventListener('DOMContentLoaded', () => {
+    checkPaymentStatus();
+    setupIntakeButton();
+    dbg("paypal-checkout.js loaded");
+  });
 
 })();
