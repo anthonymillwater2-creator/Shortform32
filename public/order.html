@@ -22,9 +22,11 @@
     pointer-events: auto !important;
   }
 
-  /* Intake locking (required) */
-  .locked { pointer-events: none; opacity: 0.25; }
+  /* Intake lock helpers */
+  .locked { pointer-events:none; opacity:0.25; }
   #intake-section[hidden] { display:none !important; }
+  .receipt-section { margin-top: 16px; }
+
 </style>
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -214,47 +216,61 @@
                 <span class="total-value" id="totalAmount">$0</span>
               </div>
 
-              <!-- PAYMENT SECTION (required IDs) -->
-              <section id="payment-section">
-                <button class="btn btn-primary btn-full" id="payButton" type="button" disabled>
-                  Proceed to PayPal Payment
-                </button>
+              
+              <div id="payment-section" class="payment-section">
+                <div class="paypal-wrap">
+                  <div id="pay-error" class="error-message" style="display:none;"></div>
+                  <div id="paypal-button-container" style="margin-top: 12px;"></div>
+                </div>
+              </div>
 
-                <!-- Debug panel - must show state changes and tap events -->
-                <pre id="pp-debug" style="white-space:pre-wrap;color:#C6FF40;font-size:12px;line-height:1.25;margin-top:10px;max-height:180px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:4px;"></pre>
+              <div id="receipt-section" class="receipt-section" aria-live="polite"></div>
 
-                <!-- PayPal Button Container (required ID) -->
-                <div id="paypal-button-container" style="margin-top: 12px; display:none;"></div>
+              <section id="intake-section" class="intake-section locked" aria-disabled="true" hidden>
+                <h3 class="intake-title">Project Details</h3>
+                <p class="intake-subtitle">Payment confirmed. Fill this out to start production.</p>
 
-                <!-- Visible error line under PayPal area (required ID) -->
-                <div id="pay-error" style="margin-top:10px;color:#ff5b6e;font-weight:700;"></div>
-              </section>
-
-              <!-- Receipt injection target (required ID) -->
-              <div id="receipt-section"></div>
-
-              <!-- INTAKE (required IDs) - starts locked/hidden -->
-              <section class="intake-section locked" id="intake-section" aria-disabled="true" hidden>
-                <form id="intake-form">
-                  <div class="form-group" style="margin-top:16px;">
+                <form id="intake-form" class="intake-form" novalidate>
+                  <div class="form-group">
                     <label class="form-label" for="intake-first">
-                      <span class="label-icon">🔗</span>
-                      Footage Link (Required)
+                      <span class="label-icon">📧</span>
+                      Email (required)
                     </label>
-                    <input id="intake-first" name="footage_link" class="form-input" required placeholder="Paste Google Drive / Dropbox link" />
-                    <div class="form-hint">Make sure the link permissions are set to "Anyone with the link can view".</div>
+                    <input id="intake-first" name="email" type="email" class="form-input" required placeholder="you@company.com" />
                   </div>
 
                   <div class="form-group">
-                    <label class="form-label" for="intakeNotes">
-                      <span class="label-icon">📝</span>
-                      Extra Project Details (Optional)
+                    <label class="form-label" for="intake-name">
+                      <span class="label-icon">👤</span>
+                      Name / Brand
                     </label>
-                    <textarea id="intakeNotes" name="intake_notes" class="form-textarea" rows="4" placeholder="Anything else we should know (timestamps, style refs, hook ideas, etc.)"></textarea>
+                    <input id="intake-name" name="name" type="text" class="form-input" placeholder="Your name or brand" />
                   </div>
 
-                  <button class="btn btn-secondary btn-full" id="submitIntakeButton" type="submit" disabled>
-                    <span class="btn-icon">📧</span>
+                  <div class="form-group">
+                    <label class="form-label" for="intake-footage">
+                      <span class="label-icon">🔗</span>
+                      Footage Link (Drive/Dropbox)
+                    </label>
+                    <input id="intake-footage" name="footage" type="url" class="form-input" placeholder="https://..." />
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label" for="intake-notes">
+                      <span class="label-icon">📝</span>
+                      Notes / Instructions
+                    </label>
+                    <textarea id="intake-notes" name="notes" class="form-textarea" rows="5" placeholder="Goals, style refs, do/don’t, timestamps, etc."></textarea>
+                  </div>
+
+                  <input type="hidden" name="service" id="intake-service">
+                  <input type="hidden" name="package" id="intake-package">
+                  <input type="hidden" name="addons" id="intake-addons">
+                  <input type="hidden" name="orderID" id="intake-orderID">
+                  <input type="hidden" name="captureID" id="intake-captureID">
+
+                  <button type="submit" class="btn btn-secondary btn-full" id="intake-submit" disabled>
+                    <span class="btn-icon">✅</span>
                     Submit Project Details
                   </button>
 
@@ -264,6 +280,7 @@
                   </p>
                 </form>
               </section>
+
             </div>
 
             <div class="payment-security">

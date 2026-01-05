@@ -74,6 +74,17 @@
     frame();
   }
 
+  // Debug helper for order page
+  function dbg(m){
+    var el = document.getElementById('pp-debug');
+    if(el) el.textContent = String(m) + "
+" + (el.textContent||"");
+  }
+
+  // Global error handlers
+  window.addEventListener("error", (e)=> dbg("JS ERROR: "+e.message));
+  window.addEventListener("unhandledrejection", (e)=> dbg("PROMISE ERROR: "+String(e.reason)));
+
   // Order page logic
   const serviceSelect = $('#serviceSelect');
   const packageSection = $('#packageSection');
@@ -90,6 +101,9 @@
 
   const serviceError = $('#serviceError');
   const packageError = $('#packageError');
+
+  // Single source of truth for numeric total
+  let currentTotal = 0;
 
   const PRICES = {
     aiReel: {name:'AI Reel Edit', basic:25, standard:60, premium:140},
@@ -137,6 +151,22 @@
     packageSection.style.display = '';
   }
 
+  // Sync pay button enabled state based on selections + total
+  function syncPayButton(){
+    if(!payBtn) return;
+    const serviceOk = Boolean(selectedService && PRICES[selectedService]);
+    const packageOk = Boolean(selectedPackage);
+    const ok = serviceOk && packageOk && currentTotal > 0;
+
+    if(ok){
+      payBtn.removeAttribute("disabled");
+    } else {
+      payBtn.setAttribute("disabled", "disabled");
+    }
+
+    dbg(`syncPayButton ok=${ok} total=${currentTotal} serviceOk=${serviceOk} packageOk=${packageOk}`);
+  }
+
   function recalc(){
     let total = 0;
     const svc = PRICES[selectedService];
@@ -167,11 +197,22 @@
     summaryAddons && (summaryAddons.textContent = addonNames.length? addonNames.join('; ') : 'None');
     totalAmountEl && (totalAmountEl.textContent = formatUSD(total));
 
-    const ready = Boolean(svc && selectedPackage);
-    if(payBtn) payBtn.disabled = !ready || total<=0;
-    // intake lock/unlock is handled by paypal-config.js via sessionStorage
-    // don't override it here, just set initial disabled state
-    if(intakeBtn && !sessionStorage.getItem('sff_payment_confirmed')){
+    // Update numeric total and sync button state
+    currentTotal = total;
+    syncPayButton();
+
+
+    // Single global source of truth for payment state
+    window.ORDER_STATE = window.ORDER_STATE || {};
+    window.ORDER_STATE.service = selectedService || '';
+    window.ORDER_STATE.pack = selectedPackage || '';
+    window.ORDER_STATE.addons = selectedAddons || [];
+    window.ORDER_STATE.total = currentTotal || 0;
+    window.ORDER_STATE.currency = (window.SFF_PAYPAL && window.SFF_PAYPAL.currency) ? window.SFF_PAYPAL.currency : (window.ORDER_STATE.currency || '');
+    document.dispatchEvent(new CustomEvent('order:updated'));
+
+    // intake lock/unlock is handled by paypal-checkout.js via sessionStorage
+    if(intakeBtn && !localStorage.getItem('sff_paid_receipt_v1')){
       intakeBtn.disabled = true;
     }
   }
@@ -195,9 +236,48 @@
   // Add-on changes recalc
   $$('.addon-checkbox input').forEach(cb=> cb.addEventListener('change', recalc));
 
-  // Pay button is handled by paypal-config.js (PayPal Buttons SDK)
+  // Wire pay button tap handler
+  if(payBtn){
+    dbg("Wiring payButton tap handlers");
 
-  // Intake mailto - handled by paypal-config.js to include Order ID from sessionStorage
+    async function onPayTap(e){
+      e.preventDefault();
+      e.stopPropagation();
+      dbg("PAY TAP FIRED");
+
+      if(payBtn.hasAttribute("disabled")){
+        dbg("BLOCKED: payButton disabled");
+        return;
+      }
+
+      const container = document.getElementById("paypal-button-container");
+      if(!container){
+        dbg("FATAL: paypal-button-container missing");
+        return;
+      }
+
+      container.style.display = "block";
+      dbg("Rendering PayPal Buttons...");
+
+      // Call paypal-checkout.js render function
+      if(window.renderPayPalButtons){
+        try {
+          await window.renderPayPalButtons();
+          dbg("✓ Render complete");
+        } catch(err){
+          dbg("Render error: " + err.message);
+        }
+      } else {
+        dbg("ERROR: window.renderPayPalButtons not found - paypal-checkout.js missing?");
+      }
+    }
+
+    payBtn.addEventListener("pointerup", onPayTap, {passive:false});
+    payBtn.addEventListener("click", onPayTap);
+    dbg("✓ payButton handlers wired");
+  }
+
+  // Intake mailto - handled by paypal-checkout.js to include Order ID from sessionStorage
 
   // Notes hint
   if(notesArea){
