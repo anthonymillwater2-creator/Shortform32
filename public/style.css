@@ -147,3 +147,8 @@ a:hover{text-shadow:0 0 16px rgba(198,255,64,.6)}
 
 /* Defensive: hide accidental duplicate nav rows */
 nav + nav { display: none !important; }
+
+
+/* Intake lock helpers */
+.locked{pointer-events:none;opacity:0.25;}
+#intake-section[hidden]{display:none!important;}
