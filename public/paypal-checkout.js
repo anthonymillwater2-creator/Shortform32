@@ -3,7 +3,7 @@
   'use strict';
 
   // ====== CONSTANTS ======
-  const TALLY_FORM_URL = "https://tally.so/r/YOUR_FORM_ID"; // UPDATE THIS AFTER CREATING TALLY FORM
+  const TALLY_FORM_URL = "https://tally.so/r/b5jRve";
   let CAPTURE_IN_FLIGHT = false;
 
   const dbg = window.dbg || function(m){ console.log('[PAYPAL]', m); };
