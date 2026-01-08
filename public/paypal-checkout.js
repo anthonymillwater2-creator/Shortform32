@@ -1,408 +1,290 @@
-(function () {
+// PayPal Checkout - Tally.so External Form Integration
+(function() {
   'use strict';
 
-  // ====== GLOBAL SINGLE SOURCE OF TRUTH ======
-  window.ORDER_STATE = window.ORDER_STATE || {
-    service: '',
-    pack: '',
-    addons: [],
-    total: 0,
-    currency: '',
-  };
+  // ====== CONSTANTS ======
+  const TALLY_FORM_URL = "https://tally.so/r/b5jRve";
+  let CAPTURE_IN_FLIGHT = false;
 
-  var RECEIPT_KEY = 'sff_paid_receipt_v1';
-  var UNLOCKED = false;
-  var CAPTURE_IN_FLIGHT = false;
-  var BUTTONS_RENDERED = false;
-  var PAYPAL_ACTIONS = null;
+  const dbg = window.dbg || function(m){ console.log('[PAYPAL]', m); };
 
-  function $(id) { return document.getElementById(id); }
+  // ====== DOM REFERENCES ======
+  let payError;
 
-  function setPayError(msg) {
-    var el = $('pay-error');
-    if (!el) return;
-    if (msg) {
-      el.textContent = String(msg);
-      el.style.display = 'block';
-    } else {
-      el.textContent = '';
-      el.style.display = 'none';
-    }
-  }
-
-  function lockIntake(reason) {
-    var intakeSection = $('intake-section');
-    var intakeForm = $('intake-form');
-    var paymentSection = $('payment-section');
-
-    if (paymentSection) paymentSection.style.display = '';
-    if (intakeSection) {
-      intakeSection.hidden = true;
-      intakeSection.classList.add('locked');
-      intakeSection.setAttribute('aria-disabled', 'true');
-    }
-
-    if (intakeForm) {
-      var nodes = intakeForm.querySelectorAll('input,select,textarea,button');
-      for (var i = 0; i < nodes.length; i++) nodes[i].disabled = true;
-      var submit = $('intake-submit');
-      if (submit) submit.disabled = true;
-    }
-
-    setPayError(reason || '');
-  }
-
-  function renderReceipt(receipt) {
-    var receiptSection = $('receipt-section');
-    if (!receiptSection) return;
-
-    var amountLine = '';
-    if (receipt.amount && receipt.currency) {
-      amountLine = '<div class="receipt-line"><strong>Amount:</strong> ' +
-        escapeHtml(receipt.amount) + ' ' + escapeHtml(receipt.currency) + '</div>';
-    }
-
-    receiptSection.innerHTML =
-      '<div class="form-card" style="margin-top:16px;">' +
-        '<h3 style="margin:0 0 10px 0;">Payment Confirmed</h3>' +
-        amountLine +
-        '<div class="receipt-line"><strong>Order ID:</strong> ' + escapeHtml(receipt.orderID || '') + '</div>' +
-        '<div class="receipt-line"><strong>Capture ID:</strong> ' + escapeHtml(receipt.captureID || '') + '</div>' +
-        '<div class="receipt-line"><strong>Payer:</strong> ' + escapeHtml(receipt.payerEmail || '') + '</div>' +
-      '</div>';
-  }
-
-  function escapeHtml(s) {
-    return String(s || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
-
-  function unlockIntakeAndOpen(receipt) {
-    if (UNLOCKED) return;
-    UNLOCKED = true;
-
-    try {
-      localStorage.setItem(RECEIPT_KEY, JSON.stringify(receipt));
-    } catch (e) {}
-
-    renderReceipt(receipt);
-
-    var paymentSection = $('payment-section');
-    if (paymentSection) paymentSection.style.display = 'none';
-
-    var intakeSection = $('intake-section');
-    var intakeForm = $('intake-form');
-
-    if (intakeSection) {
-      intakeSection.hidden = false;
-      intakeSection.classList.remove('locked');
-      intakeSection.removeAttribute('aria-disabled');
-    }
-
-    if (intakeForm) {
-      var nodes = intakeForm.querySelectorAll('input,select,textarea,button');
-      for (var i = 0; i < nodes.length; i++) nodes[i].disabled = false;
-
-      var submit = $('intake-submit');
-      if (submit) submit.disabled = false;
-    }
-
-    hydrateIntakeHiddenFields(receipt);
-
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        if (intakeSection && intakeSection.scrollIntoView) {
-          intakeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-        var first =
-          $('intake-first') ||
-          (intakeForm ? intakeForm.querySelector('[required]') : null) ||
-          (intakeForm ? intakeForm.querySelector('input,select,textarea') : null);
-        if (first && first.focus) first.focus({ preventScroll: true });
-      });
-    });
-  }
-
-  function restorePaidStateOnLoad() {
-    try {
-      var raw = localStorage.getItem(RECEIPT_KEY);
-      if (!raw) return;
-      var receipt = JSON.parse(raw);
-      if (receipt && receipt.paid === true && receipt.captureID && receipt.orderID) {
-        unlockIntakeAndOpen(receipt);
-      }
-    } catch (e) {}
-  }
-
+  // ====== HELPER: Extract capture fields from PayPal API response ======
   function extractCaptureFields(cap) {
-    var capObj = (cap && cap.purchase_units && cap.purchase_units[0] &&
-      cap.purchase_units[0].payments && cap.purchase_units[0].payments.captures &&
-      cap.purchase_units[0].payments.captures[0]) || null;
-
-    return {
-      captureID: (capObj && capObj.id) || '',
-      amount: (capObj && capObj.amount && capObj.amount.value) || '',
-      currency: (capObj && capObj.amount && capObj.amount.currency_code) || '',
-      payerEmail: (cap && cap.payer && cap.payer.email_address) || ''
-    };
-  }
-
-  function captureOrder(orderID) {
-    if (CAPTURE_IN_FLIGHT) return Promise.reject(new Error('Capture already in progress'));
-    CAPTURE_IN_FLIGHT = true;
-
-    return fetch('/api/capture-order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderID: orderID })
-    })
-      .then(function (res) {
-        return res.json().then(function (data) {
-          if (!res.ok) {
-            var msg = (data && (data.error || data.details)) ? (data.error || data.details) : 'Capture failed';
-            throw new Error(msg);
-          }
-          return data;
-        });
-      })
-      .finally(function () {
-        CAPTURE_IN_FLIGHT = false;
-      });
-  }
-
-  function handlePayPalReturn() {
-    var params = new URLSearchParams(window.location.search || '');
-    var token = params.get('token');
-    if (!token) return Promise.resolve();
-
-    // If we already have receipt, just clean URL.
     try {
-      var raw = localStorage.getItem(RECEIPT_KEY);
-      if (raw) {
-        var r = JSON.parse(raw);
-        if (r && r.paid && r.captureID && r.orderID) {
-          history.replaceState({}, '', window.location.pathname);
-          return Promise.resolve();
-        }
-      }
-    } catch (e) {}
+      const purchase = cap.purchase_units?.[0] || {};
+      const capture = purchase.payments?.captures?.[0] || {};
 
-    return captureOrder(token)
-      .then(function (cap) {
-        var fields = extractCaptureFields(cap);
-        var receipt = {
-          paid: true,
-          ts: new Date().toISOString(),
-          orderID: token,
-          captureID: fields.captureID,
-          payerEmail: fields.payerEmail,
-          amount: fields.amount,
-          currency: fields.currency,
-          service: window.ORDER_STATE.service || '',
-          package: window.ORDER_STATE.pack || '',
-          addons: window.ORDER_STATE.addons || []
-        };
-        unlockIntakeAndOpen(receipt);
-        history.replaceState({}, '', window.location.pathname);
-      })
-      .catch(function (err) {
-        lockIntake('Capture failed: ' + (err && err.message ? err.message : ''));
-      });
-  }
-
-  function isReadyToPay() {
-    var st = window.ORDER_STATE || {};
-    return !!(st.service && st.pack && st.total && st.total > 0);
-  }
-
-  function syncButtonsEnabled() {
-    if (!PAYPAL_ACTIONS) return;
-    if (isReadyToPay()) {
-      PAYPAL_ACTIONS.enable();
-    } else {
-      PAYPAL_ACTIONS.disable();
+      return {
+        captureID: capture.id || "",
+        amount: capture.amount?.value || "",
+        currency: capture.amount?.currency_code || "",
+        payerEmail: cap.payer?.email_address || ""
+      };
+    } catch(e) {
+      dbg("extractCaptureFields error: " + e.message);
+      return { captureID: "", amount: "", currency: "", payerEmail: "" };
     }
   }
 
-  function renderButtonsOnce() {
-    if (BUTTONS_RENDERED) return;
-    var container = $('paypal-button-container');
-    if (!container) return;
+  // ====== REDIRECT TO TALLY WITH PAYMENT DATA ======
+  function redirectToTallyIntake(orderID, captureID, amount, currency, payerEmail) {
+    // Get order details from window.ORDER_STATE
+    const service = window.ORDER_STATE?.service || '';
+    const pack = window.ORDER_STATE?.pack || '';
+    const addons = window.ORDER_STATE?.addons || [];
 
-    BUTTONS_RENDERED = true;
-    setPayError('');
-
-    // Clear container to avoid any previous partial render
-    container.innerHTML = '';
-
-    window.paypal.Buttons({
-      style: { layout: 'vertical', shape: 'rect', label: 'paypal' },
-
-      onInit: function (data, actions) {
-        PAYPAL_ACTIONS = actions;
-        actions.disable();
-        syncButtonsEnabled();
-      },
-
-      createOrder: function () {
-        // Must be sync relative to user tap; no awaits here.
-        var st = window.ORDER_STATE || {};
-        return fetch('/api/create-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            service: st.service || '',
-            package: st.pack || '',
-            addons: st.addons || []
-          })
-        })
-        .then(function (res) {
-          return res.json().then(function (data) {
-            if (!res.ok) {
-              var msg = (data && data.error) ? data.error : 'Create order failed';
-              throw new Error(msg);
-            }
-            return data.orderID;
-          });
-        });
-      },
-
-      onApprove: function (data) {
-        var orderID = data.orderID;
-
-        return captureOrder(orderID)
-          .then(function (cap) {
-            var fields = extractCaptureFields(cap);
-            var receipt = {
-              paid: true,
-              ts: new Date().toISOString(),
-              orderID: orderID,
-              captureID: fields.captureID,
-              payerEmail: fields.payerEmail,
-              amount: fields.amount,
-              currency: fields.currency,
-              service: window.ORDER_STATE.service || '',
-              package: window.ORDER_STATE.pack || '',
-              addons: window.ORDER_STATE.addons || []
-            };
-            unlockIntakeAndOpen(receipt);
-          })
-          .catch(function (err) {
-            lockIntake('Capture failed: ' + (err && err.message ? err.message : ''));
-            throw err;
-          });
-      },
-
-      onError: function () {
-        lockIntake('PayPal error. Please refresh and try again.');
-      }
-    }).render('#paypal-button-container');
-  }
-
-  function hydrateIntakeHiddenFields(receipt) {
+    // Store in sessionStorage for backup
     try {
-      var st = window.ORDER_STATE || {};
-      var svc = $('intake-service'); if (svc) svc.value = st.service || '';
-      var pack = $('intake-package'); if (pack) pack.value = st.pack || '';
-      var add = $('intake-addons'); if (add) add.value = JSON.stringify(st.addons || []);
-      var oid = $('intake-orderID'); if (oid) oid.value = receipt.orderID || '';
-      var cid = $('intake-captureID'); if (cid) cid.value = receipt.captureID || '';
-    } catch (e) {}
-  }
+      sessionStorage.setItem('sff_payment_confirmed', '1');
+      sessionStorage.setItem('sff_order_id', orderID);
+      sessionStorage.setItem('sff_capture_id', captureID);
+      sessionStorage.setItem('sff_total', amount);
+      sessionStorage.setItem('sff_service', service);
+      sessionStorage.setItem('sff_package', pack);
+      sessionStorage.setItem('sff_addons', JSON.stringify(addons));
+    } catch(e) {
+      dbg("sessionStorage write failed: " + e.message);
+    }
 
-  function wireIntakeSubmit() {
-    var form = $('intake-form');
-    if (!form) return;
-
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-
-      var receipt = null;
-      try {
-        receipt = JSON.parse(localStorage.getItem(RECEIPT_KEY) || 'null');
-      } catch (err) {}
-
-      if (!receipt || !receipt.paid) return;
-
-      // For now: open mailto with structured payload (webhook-ready data already in hidden fields)
-      var email = (form.email && form.email.value) ? form.email.value : '';
-      var name = (form.name && form.name.value) ? form.name.value : '';
-      var footage = (form.footage && form.footage.value) ? form.footage.value : '';
-      var notes = (form.notes && form.notes.value) ? form.notes.value : '';
-
-      var st = window.ORDER_STATE || {};
-      var subject = 'SFF Order Intake — ' + (st.service || 'Service');
-      var body =
-        'Email: ' + email + '\n' +
-        'Name/Brand: ' + name + '\n' +
-        'Service: ' + (st.service || '') + '\n' +
-        'Package: ' + (st.pack || '') + '\n' +
-        'Add-ons: ' + JSON.stringify(st.addons || []) + '\n' +
-        'Order ID: ' + (receipt.orderID || '') + '\n' +
-        'Capture ID: ' + (receipt.captureID || '') + '\n' +
-        'Payer: ' + (receipt.payerEmail || '') + '\n' +
-        'Footage link: ' + footage + '\n\n' +
-        'Notes:\n' + notes + '\n';
-
-      var mailto = 'mailto:shortformfactory.help@gmail.com' +
-        '?subject=' + encodeURIComponent(subject) +
-        '&body=' + encodeURIComponent(body);
-
-      window.location.href = mailto;
-    }, false);
-  }
-
-  function wireGlobalErrors() {
-    window.addEventListener('error', function () {
-      setPayError('An error occurred. Please refresh and try again.');
+    // Build Tally URL with query params for hidden fields
+    const params = new URLSearchParams({
+      service: service,
+      package: pack,
+      addons: addons.join(', '),
+      total: `${currency} ${amount}`,
+      paypal_order_id: orderID,
+      paypal_capture_id: captureID,
+      customer_email: payerEmail || ''
     });
-    window.addEventListener('unhandledrejection', function () {
-      setPayError('An error occurred. Please refresh and try again.');
-    });
+
+    const tallyURL = `${TALLY_FORM_URL}?${params.toString()}`;
+
+    dbg(`Redirecting to Tally: ${tallyURL}`);
+
+    // Redirect to external Tally form
+    window.location.href = tallyURL;
   }
 
-  function init() {
-    wireGlobalErrors();
-    restorePaidStateOnLoad();
+  // ====== CAPTURE ORDER (SERVER CALL) ======
+  async function captureOrder(orderID) {
+    if (CAPTURE_IN_FLIGHT) {
+      throw new Error("Capture already in progress");
+    }
 
-    // Handle redirect return (token)
-    handlePayPalReturn().finally(function () {
-      if (!UNLOCKED) lockIntake('');
+    CAPTURE_IN_FLIGHT = true;
+    dbg("captureOrder start: " + orderID);
 
-      // Load SDK once, then render buttons once.
-      if (window.loadPayPalSDK) {
-        window.loadPayPalSDK().then(function (ok) {
-          if (!ok) {
-            lockIntake('PayPal unavailable. Please refresh and try again.');
-            return;
-          }
-          renderButtonsOnce();
-          syncButtonsEnabled();
+    try {
+      const response = await fetch("/api/capture-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderID })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `Capture failed: ${response.status}`);
+      }
+
+      dbg("✓ Capture successful");
+      return data;
+
+    } finally {
+      CAPTURE_IN_FLIGHT = false;
+    }
+  }
+
+  // ====== GET ORDER DATA ======
+  function getOrderData() {
+    const serviceSelect = document.getElementById('serviceSelect');
+    const selectedPackageRadio = document.querySelector('input[name="sff-package"]:checked');
+    const addonCheckboxes = document.querySelectorAll('.addon-checkbox input[type="checkbox"]:checked');
+
+    if (!serviceSelect || !selectedPackageRadio) {
+      return null;
+    }
+
+    const service = serviceSelect.value;
+    const packageType = selectedPackageRadio.value;
+    const addons = Array.from(addonCheckboxes).map(cb => cb.value);
+
+    // Store in global for receipt generation
+    window.ORDER_STATE = {
+      service,
+      pack: packageType,
+      addons
+    };
+
+    return { service, package: packageType, addons };
+  }
+
+  // ====== RENDER PAYPAL BUTTONS ======
+  async function renderPayPalButtons() {
+    dbg("renderPayPalButtons start");
+
+    const container = document.getElementById("paypal-button-container");
+    const payBtn = document.getElementById("payButton");
+
+    if (!container) {
+      throw new Error("PayPal container not found");
+    }
+
+    // Load SDK
+    dbg("Calling loadPayPalSDK()");
+
+    if (!window.loadPayPalSDK) {
+      throw new Error("window.loadPayPalSDK not found - paypal-loader.js missing?");
+    }
+
+    const sdkLoaded = await window.loadPayPalSDK();
+
+    if (!sdkLoaded) {
+      throw new Error("SDK load returned false");
+    }
+
+    // Verify SDK ready
+    if (!window.paypal || !window.paypal.Buttons) {
+      throw new Error("window.paypal.Buttons not available");
+    }
+
+    dbg("✓ SDK ready - window.paypal.Buttons exists");
+
+    // Clear container
+    container.innerHTML = "";
+    dbg("Rendering PayPal Buttons...");
+
+    // Render
+    await window.paypal.Buttons({
+      createOrder: async function() {
+        dbg("createOrder start");
+        const orderData = getOrderData();
+
+        if (!orderData || !orderData.service || !orderData.package) {
+          throw new Error("Missing service or package");
+        }
+
+        const response = await fetch("/api/create-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(orderData)
         });
-      } else {
-        lockIntake('PayPal loader missing. Please refresh.');
+
+        const responseData = await response.json();
+        dbg(`create-order response: ok=${response.ok}, orderID=${responseData.orderID || 'NONE'}`);
+
+        if (!response.ok || !responseData.orderID) {
+          throw new Error(responseData.error || "Failed to create order");
+        }
+
+        dbg(`✓ Order created: ${responseData.orderID}`);
+        return responseData.orderID;
+      },
+
+      onApprove: async function(data) {
+        dbg(`onApprove - orderID=${data.orderID}`);
+
+        try {
+          const cap = await captureOrder(data.orderID);
+          const fields = extractCaptureFields(cap);
+
+          dbg(`✓ Capture successful: ${fields.captureID}, Amount: ${fields.currency} ${fields.amount}`);
+
+          // Redirect to Tally form with payment data
+          redirectToTallyIntake(
+            data.orderID,
+            fields.captureID,
+            fields.amount,
+            fields.currency,
+            fields.payerEmail
+          );
+
+        } catch(error) {
+          dbg("onApprove capture error: " + error.message);
+
+          if (payError) {
+            payError.textContent = "Payment verification failed. Please contact support.";
+            payError.style.display = "block";
+          }
+        }
+      },
+
+      onCancel: function(data) {
+        dbg(`onCancel - orderID=${data.orderID || 'none'}`);
+
+        if (payError) {
+          payError.textContent = "Payment was cancelled. Please try again.";
+          payError.style.display = "block";
+        }
+
+        if (payBtn) {
+          payBtn.disabled = false;
+        }
+      },
+
+      onError: function(err) {
+        dbg(`onError: ${String(err)}`);
+
+        if (payError) {
+          payError.textContent = "An error occurred during payment. Please try again.";
+          payError.style.display = "block";
+        }
+
+        if (payBtn) {
+          payBtn.disabled = false;
+        }
+      },
+
+      style: {
+        layout: "vertical",
+        color: "gold",
+        shape: "rect",
+        label: "paypal"
+      }
+    }).render("#paypal-button-container");
+
+    dbg("✓ Buttons rendered successfully");
+
+    // Hide proceed button, show PayPal buttons
+    if (payBtn) {
+      payBtn.style.display = "none";
+    }
+
+    container.style.display = "block";
+
+    // Scroll to PayPal
+    container.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  // Expose globally for main.js to call
+  window.renderPayPalButtons = renderPayPalButtons;
+
+  // ====== INITIALIZATION ======
+  document.addEventListener('DOMContentLoaded', () => {
+    dbg("paypal-checkout.js DOMContentLoaded (Tally integration)");
+
+    // Get DOM references
+    payError = document.getElementById("pay-error");
+
+    // Wire global error handlers
+    window.addEventListener("error", (e) => {
+      if (payError) {
+        payError.textContent = "JS ERROR: " + e.message;
+        payError.style.display = "block";
       }
     });
 
-    // Enable/disable buttons as selections change
-    document.addEventListener('order:updated', function () {
-      syncButtonsEnabled();
+    window.addEventListener("unhandledrejection", (e) => {
+      if (payError) {
+        payError.textContent = "PROMISE ERROR: " + String(e.reason);
+        payError.style.display = "block";
+      }
     });
 
-    wireIntakeSubmit();
-  }
+    dbg("✓ Initialization complete - ready for payment");
+  });
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-
-  // Export required functions (if needed elsewhere)
-  window.lockIntake = lockIntake;
-  window.unlockIntakeAndOpen = unlockIntakeAndOpen;
 })();
