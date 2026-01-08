@@ -75,15 +75,11 @@
   }
 
   // Debug helper for order page
-  function dbg(m){
+  window.dbg = function(m){
     const el = document.getElementById('pp-debug');
     if(el) el.textContent = m + "\n" + (el.textContent||"");
     console.log('[ORDER]', m);
-  }
-
-  // Global error handlers
-  window.addEventListener("error", (e)=> dbg("JS ERROR: "+e.message));
-  window.addEventListener("unhandledrejection", (e)=> dbg("PROMISE ERROR: "+String(e.reason)));
+  };
 
   // Order page logic
   const serviceSelect = $('#serviceSelect');
@@ -91,9 +87,6 @@
   const packageGrid = $('#packageGrid');
   const totalAmountEl = $('#totalAmount');
   const payBtn = $('#payButton');
-  const intakeBtn = $('#submitIntakeButton');
-  const intakeNotice = $('#intakeNotice');
-  const notesArea = $('#projectNotes');
 
   const summaryService = $('#summaryService');
   const summaryPackage = $('#summaryPackage');
@@ -127,10 +120,11 @@
   function formatUSD(n){ return `$${n.toFixed(2)}`; }
 
   function renderPackages(){
+    if(!packageGrid) return;
     packageGrid.innerHTML = '';
-    if(!selectedService){ packageSection.style.display='none'; return; }
+    if(!selectedService){ packageSection && (packageSection.style.display='none'); return; }
     const p = PRICES[selectedService];
-    if(!p){ packageSection.style.display='none'; return; }
+    if(!p){ packageSection && (packageSection.style.display='none'); return; }
     const meta = [
       {key:'basic', title:'Basic', tag:'Essentials only', price:p.basic},
       {key:'standard', title:'Standard', tag:'Most popular', price:p.standard},
@@ -148,11 +142,11 @@
       });
       packageGrid.appendChild(el);
     });
-    packageSection.style.display = '';
+    packageSection && (packageSection.style.display = '');
   }
 
   // Sync pay button enabled state based on selections + total
-  function syncPayButton(){
+  window.syncPayButton = function(){
     if(!payBtn) return;
     const serviceOk = Boolean(selectedService && PRICES[selectedService]);
     const packageOk = Boolean(selectedPackage);
@@ -164,8 +158,8 @@
       payBtn.setAttribute("disabled", "disabled");
     }
 
-    dbg(`syncPayButton ok=${ok} total=${currentTotal} serviceOk=${serviceOk} packageOk=${packageOk}`);
-  }
+    window.dbg && window.dbg(`syncPayButton ok=${ok} total=${currentTotal} serviceOk=${serviceOk} packageOk=${packageOk}`);
+  };
 
   function recalc(){
     let total = 0;
@@ -199,12 +193,7 @@
 
     // Update numeric total and sync button state
     currentTotal = total;
-    syncPayButton();
-
-    // intake lock/unlock is handled by paypal-checkout.js via sessionStorage
-    if(intakeBtn && !sessionStorage.getItem('sff_payment_confirmed')){
-      intakeBtn.disabled = true;
-    }
+    if(window.syncPayButton) window.syncPayButton();
   }
 
   if(serviceSelect){
@@ -226,52 +215,45 @@
   // Add-on changes recalc
   $$('.addon-checkbox input').forEach(cb=> cb.addEventListener('change', recalc));
 
-  // Wire pay button tap handler
+  // Wire pay button - SINGLE click handler only
   if(payBtn){
-    dbg("Wiring payButton tap handlers");
+    window.dbg && window.dbg("Wiring payButton click handler");
 
     async function onPayTap(e){
       e.preventDefault();
       e.stopPropagation();
-      dbg("PAY TAP FIRED");
+      window.dbg && window.dbg("PAY TAP FIRED");
 
       if(payBtn.hasAttribute("disabled")){
-        dbg("BLOCKED: payButton disabled");
+        window.dbg && window.dbg("BLOCKED: payButton disabled");
         return;
       }
 
       const container = document.getElementById("paypal-button-container");
       if(!container){
-        dbg("FATAL: paypal-button-container missing");
+        window.dbg && window.dbg("FATAL: paypal-button-container missing");
         return;
       }
 
       container.style.display = "block";
-      dbg("Rendering PayPal Buttons...");
+      window.dbg && window.dbg("Rendering PayPal Buttons...");
 
       // Call paypal-checkout.js render function
       if(window.renderPayPalButtons){
         try {
           await window.renderPayPalButtons();
-          dbg("✓ Render complete");
+          window.dbg && window.dbg("✓ Render complete");
         } catch(err){
-          dbg("Render error: " + err.message);
+          window.dbg && window.dbg("Render error: " + err.message);
         }
       } else {
-        dbg("ERROR: window.renderPayPalButtons not found - paypal-checkout.js missing?");
+        window.dbg && window.dbg("ERROR: window.renderPayPalButtons not found - paypal-checkout.js missing?");
       }
     }
 
-    payBtn.addEventListener("pointerup", onPayTap, {passive:false});
+    // ONLY use click event (not pointerup) to avoid iOS double-firing
     payBtn.addEventListener("click", onPayTap);
-    dbg("✓ payButton handlers wired");
-  }
-
-  // Intake mailto - handled by paypal-checkout.js to include Order ID from sessionStorage
-
-  // Notes hint
-  if(notesArea){
-    notesArea.placeholder = "Optional quick notes (links, style refs, timing cues). These notes will be included in your intake email after payment.";
+    window.dbg && window.dbg("✓ payButton handler wired");
   }
 
   // Initial calc
