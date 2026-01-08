@@ -1,17 +1,15 @@
-// PayPal Checkout - Complete Intake Auto-Unlock System
+// PayPal Checkout - Tally.so External Form Integration
 (function() {
   'use strict';
 
   // ====== CONSTANTS ======
-  const RECEIPT_KEY = "sff_paid_receipt_v1";
-  let UNLOCKED = false;
+  const TALLY_FORM_URL = "https://tally.so/r/YOUR_FORM_ID"; // UPDATE THIS AFTER CREATING TALLY FORM
   let CAPTURE_IN_FLIGHT = false;
 
-  // dbg is provided by main.js
   const dbg = window.dbg || function(m){ console.log('[PAYPAL]', m); };
 
   // ====== DOM REFERENCES ======
-  let paymentSection, receiptSection, intakeSection, intakeForm, payError;
+  let payError;
 
   // ====== HELPER: Extract capture fields from PayPal API response ======
   function extractCaptureFields(cap) {
@@ -31,118 +29,43 @@
     }
   }
 
-  // ====== LOCK INTAKE ======
-  function lockIntake(reason) {
-    if (!intakeSection) return;
+  // ====== REDIRECT TO TALLY WITH PAYMENT DATA ======
+  function redirectToTallyIntake(orderID, captureID, amount, currency, payerEmail) {
+    // Get order details from window.ORDER_STATE
+    const service = window.ORDER_STATE?.service || '';
+    const pack = window.ORDER_STATE?.pack || '';
+    const addons = window.ORDER_STATE?.addons || [];
 
-    intakeSection.hidden = true;
-    intakeSection.classList.add("locked");
-    intakeSection.setAttribute("aria-disabled", "true");
-
-    // Disable all inputs
-    if (intakeForm) {
-      intakeForm.querySelectorAll("input,select,textarea,button").forEach(el => {
-        el.disabled = true;
-      });
-    }
-
-    // Show payment section
-    if (paymentSection) paymentSection.style.display = "";
-
-    // Show error if provided
-    if (reason && payError) {
-      payError.textContent = reason;
-      payError.style.display = "block";
-    }
-
-    dbg("lockIntake: " + (reason || "intake locked"));
-  }
-
-  // ====== UNLOCK INTAKE AND AUTO-OPEN ======
-  function unlockIntakeAndOpen(receipt) {
-    if (UNLOCKED) {
-      dbg("unlockIntakeAndOpen: already unlocked, skipping");
-      return;
-    }
-
-    UNLOCKED = true;
-
-    // Store receipt in localStorage
+    // Store in sessionStorage for backup
     try {
-      localStorage.setItem(RECEIPT_KEY, JSON.stringify(receipt));
-      dbg("Receipt stored in localStorage");
+      sessionStorage.setItem('sff_payment_confirmed', '1');
+      sessionStorage.setItem('sff_order_id', orderID);
+      sessionStorage.setItem('sff_capture_id', captureID);
+      sessionStorage.setItem('sff_total', amount);
+      sessionStorage.setItem('sff_service', service);
+      sessionStorage.setItem('sff_package', pack);
+      sessionStorage.setItem('sff_addons', JSON.stringify(addons));
     } catch(e) {
-      dbg("localStorage write failed: " + e.message);
+      dbg("sessionStorage write failed: " + e.message);
     }
 
-    // Render receipt
-    if (receiptSection) {
-      receiptSection.innerHTML = `
-        <div style="background:#0a0a0a;border:2px solid #C6FF40;border-radius:8px;padding:16px;margin:16px 0;">
-          <div style="color:#C6FF40;font-weight:bold;font-size:16px;margin-bottom:12px;">✓ Payment Confirmed</div>
-          <div style="font-size:13px;color:#9aa0a6;line-height:1.6;">
-            <div><strong style="color:#fff;">Amount:</strong> ${receipt.currency || 'USD'} ${receipt.amount || '0.00'}</div>
-            <div style="margin-top:4px;"><strong style="color:#fff;">Order ID:</strong><br/><code style="font-size:11px;background:#1a1a1a;padding:2px 6px;border-radius:4px;color:#C6FF40;">${receipt.orderID || 'N/A'}</code></div>
-            <div style="margin-top:4px;"><strong style="color:#fff;">Capture ID:</strong><br/><code style="font-size:11px;background:#1a1a1a;padding:2px 6px;border-radius:4px;color:#C6FF40;">${receipt.captureID || 'N/A'}</code></div>
-            ${receipt.payerEmail ? `<div style="margin-top:4px;"><strong style="color:#fff;">Email:</strong> ${receipt.payerEmail}</div>` : ''}
-          </div>
-        </div>
-      `;
-    }
-
-    // Hide payment section
-    if (paymentSection) paymentSection.style.display = "none";
-
-    // Unhide and unlock intake
-    if (intakeSection) {
-      intakeSection.hidden = false;
-      intakeSection.classList.remove("locked");
-      intakeSection.removeAttribute("aria-disabled");
-    }
-
-    // Enable all inputs
-    if (intakeForm) {
-      intakeForm.querySelectorAll("input,select,textarea,button").forEach(el => {
-        el.disabled = false;
-      });
-    }
-
-    dbg("✓ Intake unlocked");
-
-    // AUTO-SCROLL + AUTO-FOCUS (after layout settles)
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (intakeSection) {
-          intakeSection.scrollIntoView({ behavior: "smooth", block: "start" });
-
-          const first = document.getElementById("intake-first") ||
-                       intakeForm?.querySelector("[required]") ||
-                       intakeForm?.querySelector("input,select,textarea");
-
-          if (first) {
-            setTimeout(() => first.focus({ preventScroll: true }), 300);
-          }
-
-          dbg("✓ Auto-scrolled and focused");
-        }
-      });
+    // Build Tally URL with query params for hidden fields
+    const params = new URLSearchParams({
+      service: service,
+      package: pack,
+      addons: addons.join(', '),
+      total: `${currency} ${amount}`,
+      paypal_order_id: orderID,
+      paypal_capture_id: captureID,
+      customer_email: payerEmail || ''
     });
-  }
 
-  // ====== RESTORE PAID STATE ON LOAD ======
-  function restorePaidStateOnLoad() {
-    try {
-      const stored = localStorage.getItem(RECEIPT_KEY);
-      if (!stored) return;
+    const tallyURL = `${TALLY_FORM_URL}?${params.toString()}`;
 
-      const receipt = JSON.parse(stored);
-      if (receipt.paid && receipt.captureID && receipt.orderID) {
-        dbg("Restoring paid state from localStorage");
-        unlockIntakeAndOpen(receipt);
-      }
-    } catch(e) {
-      dbg("restorePaidStateOnLoad error: " + e.message);
-    }
+    dbg(`Redirecting to Tally: ${tallyURL}`);
+
+    // Redirect to external Tally form
+    window.location.href = tallyURL;
   }
 
   // ====== CAPTURE ORDER (SERVER CALL) ======
@@ -172,62 +95,6 @@
 
     } finally {
       CAPTURE_IN_FLIGHT = false;
-    }
-  }
-
-  // ====== HANDLE PAYPAL REDIRECT RETURN ======
-  async function handlePayPalReturn() {
-    const params = new URLSearchParams(location.search);
-    const token = params.get("token"); // PayPal orderID on return
-
-    if (!token) return;
-
-    // Check if we already have a receipt
-    try {
-      const stored = localStorage.getItem(RECEIPT_KEY);
-      if (stored) {
-        const receipt = JSON.parse(stored);
-        if (receipt.paid && receipt.orderID === token) {
-          dbg("Return: receipt already exists for this order");
-          // Clean URL and return
-          history.replaceState({}, "", location.pathname);
-          return;
-        }
-      }
-    } catch(e) {
-      dbg("Return: localStorage check error: " + e.message);
-    }
-
-    // Capture the order
-    dbg("Return mode: capturing orderID " + token);
-
-    try {
-      const cap = await captureOrder(token);
-      const fields = extractCaptureFields(cap);
-
-      const receipt = {
-        paid: true,
-        ts: new Date().toISOString(),
-        orderID: token,
-        ...fields,
-        service: window.ORDER_STATE?.service || "",
-        package: window.ORDER_STATE?.pack || "",
-        addons: window.ORDER_STATE?.addons || []
-      };
-
-      unlockIntakeAndOpen(receipt);
-
-      // Clean URL
-      history.replaceState({}, "", location.pathname);
-
-    } catch(error) {
-      dbg("Return capture error: " + error.message);
-      lockIntake("Payment return failed: " + error.message);
-
-      if (payError) {
-        payError.textContent = "Payment verification failed. Please contact support with Order ID: " + token;
-        payError.style.display = "block";
-      }
     }
   }
 
@@ -324,21 +191,19 @@
           const cap = await captureOrder(data.orderID);
           const fields = extractCaptureFields(cap);
 
-          const receipt = {
-            paid: true,
-            ts: new Date().toISOString(),
-            orderID: data.orderID,
-            ...fields,
-            service: window.ORDER_STATE?.service || "",
-            package: window.ORDER_STATE?.pack || "",
-            addons: window.ORDER_STATE?.addons || []
-          };
+          dbg(`✓ Capture successful: ${fields.captureID}, Amount: ${fields.currency} ${fields.amount}`);
 
-          unlockIntakeAndOpen(receipt);
+          // Redirect to Tally form with payment data
+          redirectToTallyIntake(
+            data.orderID,
+            fields.captureID,
+            fields.amount,
+            fields.currency,
+            fields.payerEmail
+          );
 
         } catch(error) {
           dbg("onApprove capture error: " + error.message);
-          lockIntake("Payment capture failed: " + error.message);
 
           if (payError) {
             payError.textContent = "Payment verification failed. Please contact support.";
@@ -349,7 +214,11 @@
 
       onCancel: function(data) {
         dbg(`onCancel - orderID=${data.orderID || 'none'}`);
-        lockIntake("Payment was cancelled");
+
+        if (payError) {
+          payError.textContent = "Payment was cancelled. Please try again.";
+          payError.style.display = "block";
+        }
 
         if (payBtn) {
           payBtn.disabled = false;
@@ -358,7 +227,6 @@
 
       onError: function(err) {
         dbg(`onError: ${String(err)}`);
-        lockIntake("PayPal error: " + String(err));
 
         if (payError) {
           payError.textContent = "An error occurred during payment. Please try again.";
@@ -385,6 +253,8 @@
       payBtn.style.display = "none";
     }
 
+    container.style.display = "block";
+
     // Scroll to PayPal
     container.scrollIntoView({ behavior: "smooth", block: "center" });
   }
@@ -392,103 +262,11 @@
   // Expose globally for main.js to call
   window.renderPayPalButtons = renderPayPalButtons;
 
-  // ====== SHOW ERROR ======
-  function showError(message) {
-    if (payError) {
-      payError.textContent = message;
-      payError.style.display = "block";
-    }
-
-    const errorDiv = document.createElement("div");
-    errorDiv.className = "payment-notification error";
-    errorDiv.textContent = message;
-    errorDiv.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: #ff4d4f;
-      color: white;
-      padding: 15px 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      z-index: 10000;
-      max-width: 320px;
-      font-size: 14px;
-    `;
-
-    document.body.appendChild(errorDiv);
-
-    setTimeout(() => {
-      errorDiv.style.opacity = "0";
-      errorDiv.style.transition = "opacity 0.3s ease";
-      setTimeout(() => errorDiv.remove(), 300);
-    }, 5000);
-  }
-
-  // ====== INTAKE FORM SUBMIT ======
-  function handleIntakeSubmit(e) {
-    e.preventDefault();
-
-    const formData = new FormData(intakeForm);
-    const email = formData.get("email");
-    const footage = formData.get("footage");
-    const notes = formData.get("notes") || "None provided";
-
-    if (!email || !footage) {
-      showError("Please fill in all required fields");
-      return;
-    }
-
-    // Get receipt data
-    let receipt = {};
-    try {
-      const stored = localStorage.getItem(RECEIPT_KEY);
-      if (stored) receipt = JSON.parse(stored);
-    } catch(e) {}
-
-    const totalAmount = document.getElementById("totalAmount")?.textContent || "$0.00";
-    const serviceName = document.getElementById("summaryService")?.textContent || receipt.service || "N/A";
-    const packageName = document.getElementById("summaryPackage")?.textContent || receipt.package || "N/A";
-    const addonsText = document.getElementById("summaryAddons")?.textContent || "None";
-
-    const emailBody = `
-New Order Intake – ${serviceName}
-
-Package: ${packageName}
-Add-ons: ${addonsText}
-Total Paid: ${totalAmount}
-PayPal Order ID: ${receipt.orderID || 'N/A'}
-PayPal Capture ID: ${receipt.captureID || 'N/A'}
-
-Email: ${email}
-
-Footage Links:
-${footage}
-
-Additional Notes:
-${notes}
-
-Social handles for tagging (optional):
-TikTok: @short.formfactory
-Instagram: @short.formfactory
-YouTube: @short.formfactory
-
-Sent from ShortFormFactory order page
-    `.trim();
-
-    const mailto = `mailto:shortformfactory.help@gmail.com?subject=${encodeURIComponent("New Order Intake – " + serviceName)}&body=${encodeURIComponent(emailBody)}`;
-    window.location.href = mailto;
-  }
-
   // ====== INITIALIZATION ======
   document.addEventListener('DOMContentLoaded', () => {
-    dbg("paypal-checkout.js DOMContentLoaded");
+    dbg("paypal-checkout.js DOMContentLoaded (Tally integration)");
 
     // Get DOM references
-    paymentSection = document.getElementById("payment-section");
-    receiptSection = document.getElementById("receipt-section");
-    intakeSection = document.getElementById("intake-section");
-    intakeForm = document.getElementById("intake-form");
     payError = document.getElementById("pay-error");
 
     // Wire global error handlers
@@ -506,33 +284,7 @@ Sent from ShortFormFactory order page
       }
     });
 
-    // Wire intake form submit
-    if (intakeForm) {
-      intakeForm.addEventListener("submit", handleIntakeSubmit);
-    }
-
-    // INITIALIZATION ORDER (per spec):
-    // 1) restorePaidStateOnLoad
-    // 2) handlePayPalReturn
-    // 3) if not unlocked, lockIntake
-
-    restorePaidStateOnLoad();
-
-    // Give restore a moment to complete before checking return
-    setTimeout(() => {
-      if (!UNLOCKED) {
-        handlePayPalReturn();
-      }
-
-      // If still not unlocked after both checks, ensure intake is locked
-      setTimeout(() => {
-        if (!UNLOCKED) {
-          lockIntake("");
-        }
-      }, 100);
-    }, 100);
-
-    dbg("✓ Initialization complete");
+    dbg("✓ Initialization complete - ready for payment");
   });
 
 })();

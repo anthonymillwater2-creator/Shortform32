@@ -235,43 +235,7 @@
                 <pre id="pp-debug" style="white-space:pre-wrap;color:#C6FF40;font-size:12px;line-height:1.25;margin-top:10px;max-height:180px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:4px;"></pre>
               </div>
 
-              <!-- Receipt Section (renders after payment) -->
-              <div id="receipt-section"></div>
-
-              <!-- Intake Section (locked until payment) -->
-              <div id="intake-section" class="locked" aria-disabled="true" hidden>
-                <form id="intake-form">
-                  <div style="margin-top:20px;margin-bottom:16px;">
-                    <h3 style="color:#C6FF40;margin-bottom:8px;">📧 Submit Project Details</h3>
-                    <p style="font-size:13px;color:#9aa0a6;">Payment confirmed! Now provide your project details so we can begin.</p>
-                  </div>
-
-                  <div style="margin-bottom:12px;">
-                    <label for="intake-first" style="display:block;margin-bottom:4px;font-size:13px;color:#fff;">Email Address *</label>
-                    <input type="email" id="intake-first" name="email" required
-                           style="width:100%;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:14px;"
-                           placeholder="your@email.com">
-                  </div>
-
-                  <div style="margin-bottom:12px;">
-                    <label for="intake-footage" style="display:block;margin-bottom:4px;font-size:13px;color:#fff;">Footage Links (Drive/Dropbox/etc.) *</label>
-                    <textarea id="intake-footage" name="footage" required rows="3"
-                              style="width:100%;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:14px;resize:vertical;"
-                              placeholder="Paste your Google Drive, Dropbox, or WeTransfer links here..."></textarea>
-                  </div>
-
-                  <div style="margin-bottom:16px;">
-                    <label for="intake-notes" style="display:block;margin-bottom:4px;font-size:13px;color:#fff;">Additional Notes (Optional)</label>
-                    <textarea id="intake-notes" name="notes" rows="4"
-                              style="width:100%;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#fff;font-size:14px;resize:vertical;"
-                              placeholder="Style preferences, timing cues, special requests..."></textarea>
-                  </div>
-
-                  <button type="submit" id="submitIntakeButton" class="btn btn-primary btn-full" disabled>
-                    Send Project Details to ShortFormFactory
-                  </button>
-                </form>
-              </div>
+              <!-- Note: Intake handled by external Tally form after payment -->
             </div>
 
             <div class="payment-security">
@@ -293,7 +257,7 @@
           <div class="info-cards">
             <div class="info-card">
               <strong>💎 What Happens Next?</strong>
-              <p>After payment, send your footage links + notes to shortformfactory.help@gmail.com so we can begin immediately.</p>
+              <p>After payment, you'll be redirected to fill out your project details (footage links, notes, etc.). We'll receive your info and begin work immediately.</p>
             </div>
             <div class="info-card">
               <strong>🎯 Revisions Policy</strong>
